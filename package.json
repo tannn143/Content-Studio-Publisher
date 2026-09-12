@@ -1,7 +1,7 @@
 {
   "name": "wallpaper-auto-marketing",
   "version": "1.0.0",
-  "description": "Wallpaper Studio Publisher - cong cu desktop tu host giup mot creator dang tac pham goc cua chinh minh len YouTube, Facebook, Instagram, TikTok, Telegram tu mot noi dung soan tay",
+  "description": "Content Studio Publisher - cong cu desktop tu host giup mot creator dang tac pham goc cua chinh minh len YouTube, Facebook, Instagram, TikTok, Telegram tu mot noi dung soan tay",
   "type": "module",
   "main": "./src/index.js",
   "exports": {

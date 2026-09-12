@@ -559,7 +559,7 @@ test('API: phuc vu UI tinh', async () => {
     const index = await fetch(`${base}/`);
     assert.equal(index.status, 200);
     const html = await index.text();
-    assert.match(html, /Wallpaper Studio Publisher/);
+    assert.match(html, /Content Studio Publisher/);
 
     const css = await fetch(`${base}/assets/styles.css`);
     assert.equal(css.status, 200);
