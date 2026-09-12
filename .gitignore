@@ -1,0 +1,30 @@
+# Du lieu cua web admin: CHUA TOKEN, khong bao gio commit
+data/
+.tmp-data/
+*.tokens.json
+tokens.json
+
+# Bien moi truong
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+.npm/
+
+# He thong
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Tam
+*.tmp
+*.corrupt.*
+coverage/

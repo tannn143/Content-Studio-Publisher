@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Đang kết nối TikTok…</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1219; color: #e6eaf2; padding: 24px;
+  }
+  @media (prefers-color-scheme: light) { body { background: #f4f6fb; color: #1b2333; } }
+  .card { max-width: 460px; text-align: center; }
+  h1 { font-size: 19px; margin: 0 0 10px; }
+  p { margin: 0 0 12px; }
+  .muted { opacity: .7; font-size: 13.5px; }
+  a.btn {
+    display: inline-block; margin-top: 8px; padding: 9px 16px; border-radius: 8px;
+    background: #4f7cff; color: #fff; text-decoration: none; font-weight: 600;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px; word-break: break-all;
+  }
+  .err { color: #ef4a5c; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1 id="title">Đang chuyển về ứng dụng…</h1>
+  <p class="muted" id="msg">Nếu trình duyệt không tự chuyển, bấm nút bên dưới.</p>
+  <p><a class="btn" id="go" href="#">Mở ứng dụng</a></p>
+  <p class="muted"><code id="target"></code></p>
+</div>
+
+<script>
+/*
+ * Trang cầu nối OAuth cho TikTok.
+ *
+ * Vì sao cần: TikTok từ chối mọi redirect_uri không bắt đầu bằng https, kể cả
+ * http://127.0.0.1 — nên không đăng ký thẳng địa chỉ web admin được. Đăng ký
+ * trang https này làm Redirect URI, nó nhận code/state rồi chuyển tiếp về
+ * server chạy trên máy người dùng.
+ *
+ * Trang này KHÔNG đọc, không lưu và không gửi code đi đâu khác: nó chỉ ghép lại
+ * đúng query string và chuyển hướng về loopback. Đặt được trên bất kỳ host tĩnh
+ * https nào (GitHub Pages, Cloudflare Pages, Netlify...).
+ *
+ * Đổi cổng ở đây nếu web admin chạy cổng khác 4000.
+ */
+var PORT = 4000;
+
+var params = new URLSearchParams(location.search);
+
+// Cho phép đổi cổng qua ?port=4100 để không phải sửa file khi chạy cổng khác.
+var port = parseInt(params.get('port') || '', 10);
+if (port >= 1 && port <= 65535) PORT = port;
+params.delete('port');
+
+var target = 'http://127.0.0.1:' + PORT + '/oauth/tiktok/callback?' + params.toString();
+
+document.getElementById('go').href = target;
+document.getElementById('target').textContent = target;
+
+if (params.get('error')) {
+  document.getElementById('title').textContent = 'TikTok từ chối cấp quyền';
+  document.getElementById('title').className = 'err';
+  document.getElementById('msg').textContent =
+    params.get('error_description') || params.get('error');
+} else if (!params.get('code')) {
+  document.getElementById('title').textContent = 'Thiếu mã uỷ quyền';
+  document.getElementById('title').className = 'err';
+  document.getElementById('msg').textContent =
+    'TikTok không trả về tham số "code". Thử kết nối lại từ ứng dụng.';
+} else {
+  location.replace(target);
+}
+</script>
+</body>
+</html>

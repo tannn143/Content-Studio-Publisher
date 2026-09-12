@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wallpaper Studio Publisher — Bảng điều khiển</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <!-- ============================ Đăng nhập ============================ -->
+  <div id="login" class="login hidden">
+    <form class="login-card" id="login-form">
+      <div class="login-logo">🚀</div>
+      <h1>Wallpaper Studio Publisher</h1>
+      <p class="muted">Nhập token quản trị để tiếp tục.</p>
+      <input type="password" id="login-token" placeholder="Token quản trị" autocomplete="current-password" required />
+      <button type="submit" class="btn btn-primary btn-block">Đăng nhập</button>
+      <p class="login-hint muted">
+        Token được in ra console khi khởi động server, hoặc đặt qua biến môi trường <code>WAM_ADMIN_TOKEN</code>.
+      </p>
+      <div id="login-error" class="alert alert-error hidden"></div>
+    </form>
+  </div>
+
+  <!-- ============================== Ứng dụng ============================== -->
+  <div id="app" class="app hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-logo">🚀</span>
+        <div>
+          <strong>Studio Publisher</strong>
+          <small class="muted">Đăng đa kênh</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item" data-view="composer"><span>✍️</span> Soạn bài</button>
+        <button class="nav-item" data-view="queue"><span>🗓️</span> Hàng đợi <span class="badge" id="badge-queue">0</span></button>
+        <button class="nav-item" data-view="channels"><span>🔗</span> Kênh <span class="badge" id="badge-channels">0</span></button>
+        <button class="nav-item" data-view="history"><span>📜</span> Lịch sử</button>
+        <button class="nav-item" data-view="settings"><span>⚙️</span> Cài đặt</button>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">
+          Kênh đã kết nối
+          <button class="link-btn" id="btn-verify-all" title="Kiểm tra token tất cả kênh">kiểm tra</button>
+        </div>
+        <div id="sidebar-channels" class="sidebar-channels"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div id="scheduler-status" class="scheduler-status"></div>
+        <button class="link-btn" id="btn-logout">Đăng xuất</button>
+      </div>
+    </aside>
+
+    <!-- Nội dung chính -->
+    <main class="main">
+      <!-- ---------------------------- Soạn bài ---------------------------- -->
+      <section class="view" id="view-composer">
+        <header class="view-head">
+          <div>
+            <h1>Soạn bài</h1>
+            <p class="muted">Một nội dung, đăng lên nhiều kênh. Mỗi kênh có thể tuỳ biến riêng.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" id="btn-reset">Làm mới</button>
+            <button class="btn" id="btn-save-draft">Lưu nháp</button>
+            <button class="btn" id="btn-dry-run" title="Không gọi API, chỉ xem sẽ gửi gì">Chạy thử</button>
+            <button class="btn btn-primary" id="btn-publish-now">Đăng ngay</button>
+          </div>
+        </header>
+
+        <div class="composer">
+          <!-- Cột soạn -->
+          <div class="composer-main card">
+            <div class="field">
+              <label class="field-label">Kênh đăng</label>
+              <div id="channel-picker" class="channel-picker"></div>
+              <p class="muted small" id="channel-picker-empty">
+                Chưa có kênh nào. Sang tab <a href="#channels" data-view-link="channels">Kênh</a> để kết nối.
+              </p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="in-title">
+                Tiêu đề
+                <span class="muted small">— YouTube bắt buộc; Facebook/Telegram dùng làm dòng đầu</span>
+              </label>
+              <input type="text" id="in-title" placeholder="VD: Bộ hình nền 4K tháng 9 — Anime Art" />
+              <div class="counter" id="counter-title"></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="in-description">Nội dung</label>
+              <textarea id="in-description" rows="7" placeholder="Mô tả bài đăng..."></textarea>
+              <div class="counter" id="counter-description"></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="in-hashtags">Hashtag</label>
+              <div class="hashtag-input">
+                <div id="hashtag-chips" class="chips"></div>
+                <input type="text" id="in-hashtags" placeholder="Nhập hashtag rồi Enter (hoặc dán nhiều tag cách nhau bởi dấu phẩy)" />
+              </div>
+              <p class="muted small">Instagram tối đa 30 · TikTok/Telegram không giới hạn · YouTube dùng cả trong mô tả và tags.</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="in-link">Link kèm theo <span class="muted small">(tuỳ chọn)</span></label>
+              <input type="url" id="in-link" placeholder="https://..." />
+            </div>
+
+            <div class="field">
+              <label class="field-label">Ảnh / Video</label>
+              <div id="dropzone" class="dropzone">
+                <input type="file" id="file-input" multiple accept="image/*,video/*" hidden />
+                <div class="dropzone-inner">
+                  <span class="dropzone-icon">🖼️</span>
+                  <p><strong>Kéo file vào đây</strong> hoặc <button type="button" class="link-btn" id="btn-browse">chọn file</button></p>
+                  <p class="muted small">Ảnh JPEG/PNG/WebP · Video MP4/MOV/WebM</p>
+                </div>
+              </div>
+              <div id="media-list" class="media-list"></div>
+            </div>
+
+            <details class="field per-channel" id="per-channel-section">
+              <summary>Tuỳ biến theo từng kênh</summary>
+              <div id="per-channel-tabs" class="per-channel-tabs"></div>
+              <div id="per-channel-body" class="per-channel-body"></div>
+            </details>
+
+            <div class="field schedule-field">
+              <label class="field-label">Lên lịch</label>
+              <div class="schedule-row">
+                <input type="datetime-local" id="in-schedule" />
+                <button class="btn" id="btn-queue">Thêm vào hàng đợi</button>
+              </div>
+              <div id="slot-suggestions" class="slots"></div>
+            </div>
+          </div>
+
+          <!-- Cột xem trước -->
+          <aside class="composer-side">
+            <div class="card">
+              <div class="card-head">
+                <h2>Xem trước</h2>
+                <button class="link-btn" id="btn-refresh-preview">làm mới</button>
+              </div>
+              <div id="preview-list" class="preview-list">
+                <p class="muted small">Chọn kênh để xem trước caption từng nơi.</p>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h2>Hoạt động</h2>
+                <button class="link-btn" id="btn-clear-activity">xoá</button>
+              </div>
+              <div id="activity" class="activity"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ---------------------------- Hàng đợi ---------------------------- -->
+      <section class="view hidden" id="view-queue">
+        <header class="view-head">
+          <div>
+            <h1>Hàng đợi</h1>
+            <p class="muted">Bài đã lên lịch sẽ tự đăng đúng giờ (Instagram/TikTok/Telegram không có hẹn giờ gốc nên scheduler tự xử lý).</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" id="btn-tick">Chạy scheduler ngay</button>
+            <button class="btn" id="btn-toggle-scheduler">Tạm dừng</button>
+          </div>
+        </header>
+        <div id="queue-list" class="post-list"></div>
+      </section>
+
+      <!-- ------------------------------ Kênh ------------------------------ -->
+      <section class="view hidden" id="view-channels">
+        <header class="view-head">
+          <div>
+            <h1>Kênh</h1>
+            <p class="muted">Kết nối tài khoản bằng OAuth. Token được lưu trên máy bạn, không gửi đi đâu khác.</p>
+          </div>
+        </header>
+
+        <div id="provider-cards" class="provider-grid"></div>
+
+        <div class="card">
+          <div class="card-head"><h2>Kết nối Telegram</h2></div>
+          <p class="muted small">
+            Telegram không dùng OAuth. Tạo bot bằng <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>,
+            thêm bot vào channel làm <strong>admin</strong> có quyền "Post Messages", rồi nhập thông tin dưới đây.
+          </p>
+          <form class="inline-form" id="form-telegram">
+            <input type="text" id="tg-token" placeholder="Bot token (123456:ABC-...)" required />
+            <input type="text" id="tg-chat" placeholder="@tenchannel hoặc -1001234567890" required />
+            <button type="submit" class="btn btn-primary">Kết nối</button>
+          </form>
+        </div>
+
+        <div id="channel-cards" class="channel-grid"></div>
+      </section>
+
+      <!-- ----------------------------- Lịch sử ----------------------------- -->
+      <section class="view hidden" id="view-history">
+        <header class="view-head">
+          <div>
+            <h1>Lịch sử</h1>
+            <p class="muted">Kết quả từng kênh, kèm link bài đã đăng và lý do lỗi nếu có.</p>
+          </div>
+          <div class="view-actions">
+            <select id="history-filter">
+              <option value="">Tất cả</option>
+              <option value="posted">Thành công</option>
+              <option value="partial">Một phần</option>
+              <option value="failed">Thất bại</option>
+              <option value="draft">Nháp</option>
+            </select>
+          </div>
+        </header>
+        <div id="history-list" class="post-list"></div>
+      </section>
+
+      <!-- ----------------------------- Cài đặt ----------------------------- -->
+      <section class="view hidden" id="view-settings">
+        <header class="view-head">
+          <div>
+            <h1>Cài đặt</h1>
+            <p class="muted">Thông tin app OAuth, khung giờ đăng, và nơi lưu media công khai.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-primary" id="btn-save-settings">Lưu cài đặt</button>
+          </div>
+        </header>
+
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-head"><h2>Ứng dụng OAuth</h2></div>
+            <p class="muted small">
+              Mỗi nền tảng cần bạn tự tạo app và khai báo đúng <strong>Redirect URI</strong> bên dưới.
+            </p>
+            <div id="credentials-form"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Khung giờ đăng</h2></div>
+            <p class="muted small">Dùng để gợi ý thời điểm khi lên lịch (giống posting schedule của Buffer).</p>
+            <label class="field-label" for="set-timezone">Múi giờ</label>
+            <input type="text" id="set-timezone" placeholder="Asia/Ho_Chi_Minh" />
+            <label class="field-label" for="set-times">Giờ đăng (mỗi dòng một giờ, HH:mm)</label>
+            <textarea id="set-times" rows="5" placeholder="09:00&#10;12:30&#10;19:00"></textarea>
+
+            <div class="card-head"><h2>Đăng bài</h2></div>
+            <label class="field-label" for="set-concurrency">Số kênh đăng song song</label>
+            <input type="number" id="set-concurrency" min="1" max="10" />
+            <label class="field-label" for="set-retries">Số lần thử lại khi lỗi tạm thời</label>
+            <input type="number" id="set-retries" min="0" max="10" />
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Media công khai</h2></div>
+            <p class="muted small">
+              Instagram (ảnh) và TikTok (ảnh) chỉ nhận <strong>URL công khai</strong>, không cho upload file.
+              Cấu hình S3/R2 hoặc một tunnel để module tự đưa file lên rồi xoá sau khi đăng.
+            </p>
+            <label class="field-label" for="mh-type">Kiểu</label>
+            <select id="mh-type">
+              <option value="none">Không dùng (chỉ đăng media đã là URL)</option>
+              <option value="s3">S3 / R2 / MinIO</option>
+              <option value="tunnel">Tunnel tới máy này (ngrok/cloudflared)</option>
+            </select>
+            <div id="mh-s3" class="hidden">
+              <input type="text" id="s3-bucket" placeholder="Bucket" />
+              <input type="text" id="s3-region" placeholder="Region (vd auto, ap-southeast-1)" />
+              <input type="text" id="s3-endpoint" placeholder="Endpoint (R2/MinIO, để trống nếu dùng AWS)" />
+              <input type="text" id="s3-key" placeholder="Access Key ID" />
+              <input type="password" id="s3-secret" placeholder="Secret Access Key" />
+              <input type="text" id="s3-public" placeholder="Public base URL (CDN)" />
+              <label class="checkbox"><input type="checkbox" id="s3-pathstyle" /> Force path style (MinIO/R2)</label>
+            </div>
+            <div id="mh-tunnel" class="hidden">
+              <input type="text" id="tunnel-url" placeholder="https://abc.trycloudflare.com" />
+              <input type="number" id="tunnel-port" placeholder="8787" />
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Modal sửa bài trong hàng đợi -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modal-title">Chi tiết</h2>
+        <button class="icon-btn" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

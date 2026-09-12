@@ -1,0 +1,59 @@
+{
+  "name": "wallpaper-auto-marketing",
+  "version": "1.0.0",
+  "description": "Wallpaper Studio Publisher - cong cu desktop tu host giup mot creator dang tac pham goc cua chinh minh len YouTube, Facebook, Instagram, TikTok, Telegram tu mot noi dung soan tay",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./platforms/*": "./src/platforms/*.js",
+    "./core/*": "./src/core/*.js"
+  },
+  "bin": {
+    "wam": "./bin/cli.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "public",
+    ".env.example",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "serve": "node bin/cli.js serve",
+    "serve:dev": "node --watch bin/cli.js serve --log-level debug",
+    "test": "node --test test/*.test.js",
+    "test:watch": "node --test --watch test/*.test.js",
+    "check": "node -e \"[...require(`fs`).readdirSync(`src`,{recursive:true})].filter(f=>f.endsWith(`.js`)).forEach(f=>require(`child_process`).execSync(`node --check src/`+f))\" && echo OK",
+    "example": "node examples/basic.js",
+    "example:advanced": "node examples/advanced.js",
+    "post": "node bin/cli.js post",
+    "verify": "node bin/cli.js verify",
+    "channels": "node bin/cli.js channels",
+    "platforms": "node bin/cli.js platforms",
+    "tick": "node bin/cli.js tick"
+  },
+  "keywords": [
+    "social-media",
+    "content-publishing",
+    "creator-tools",
+    "self-hosted",
+    "youtube",
+    "facebook",
+    "instagram",
+    "tiktok",
+    "telegram",
+    "oauth",
+    "reels",
+    "shorts",
+    "wallpaper",
+    "cross-posting",
+    "publishing-scheduler"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
