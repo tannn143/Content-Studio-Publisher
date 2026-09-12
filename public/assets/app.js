@@ -96,12 +96,12 @@ function fmtRelative(iso) {
   const diff = new Date(iso).getTime() - Date.now();
   const abs = Math.abs(diff);
   const mins = Math.round(abs / 60000);
-  if (mins < 1) return diff >= 0 ? 'ngay bây giờ' : 'vừa xong';
-  if (mins < 60) return diff >= 0 ? `sau ${mins} phút` : `${mins} phút trước`;
+  if (mins < 1) return diff >= 0 ? 'just now' : 'moments ago';
+  if (mins < 60) return diff >= 0 ? `in ${mins} min` : `${mins} min ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return diff >= 0 ? `sau ${hours} giờ` : `${hours} giờ trước`;
+  if (hours < 24) return diff >= 0 ? `in ${hours} h` : `${hours} h ago`;
   const days = Math.round(hours / 24);
-  return diff >= 0 ? `sau ${days} ngày` : `${days} ngày trước`;
+  return diff >= 0 ? `in ${days} d` : `${days} d ago`;
 }
 
 function fmtDuration(sec) {
@@ -150,7 +150,7 @@ async function api(path, { method = 'GET', body, raw, headers = {} } = {}) {
     // Phien dang nhap het han -> quay ve trang dang nhap thay vi de UI chet cung.
     if (res.status === 401 && !state.sessionExpired) {
       state.sessionExpired = true;
-      toast('Phiên đăng nhập đã hết hạn.', { type: 'warn', title: 'Cần đăng nhập lại' });
+      toast('Your session has expired.', { type: 'warn', title: 'Please sign in again' });
       setTimeout(() => location.reload(), 1200);
     }
     throw err;
@@ -177,12 +177,12 @@ function uploadFile(file, onProgress) {
       }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data.media);
       else {
-        const err = new Error(data.error || `Upload lỗi (HTTP ${xhr.status})`);
+        const err = new Error(data.error || `Upload failed (HTTP ${xhr.status})`);
         err.hint = data.hint;
         reject(err);
       }
     };
-    xhr.onerror = () => reject(new Error('Mất kết nối khi upload'));
+    xhr.onerror = () => reject(new Error('Connection lost during upload'));
     xhr.send(file);
   });
 }
@@ -192,8 +192,8 @@ function uploadFile(file, onProgress) {
 async function boot() {
   // Thông báo từ OAuth callback (?ok=... / ?error=...)
   const params = new URLSearchParams(location.search);
-  if (params.get('ok')) toast(params.get('ok'), { type: 'success', title: 'Kết nối thành công' });
-  if (params.get('error')) toast(params.get('error'), { type: 'error', title: 'Kết nối thất bại', timeout: 12000 });
+  if (params.get('ok')) toast(params.get('ok'), { type: 'success', title: 'Account connected' });
+  if (params.get('error')) toast(params.get('error'), { type: 'error', title: 'Could not connect', timeout: 12000 });
   if (params.get('ok') || params.get('error')) {
     history.replaceState(null, '', location.pathname + location.hash);
   }
@@ -318,9 +318,9 @@ function bindUI() {
 
   // Hàng đợi
   $('#btn-tick').onclick = async () => {
-    toast('Đang chạy scheduler...', { type: 'info' });
+    toast('Running the scheduler...', { type: 'info' });
     const r = await api('/api/scheduler/tick', { method: 'POST' });
-    toast(`Đã đăng ${r.result.published}, lỗi ${r.result.failed}`, { type: r.result.failed ? 'warn' : 'success' });
+    toast(`Published ${r.result.published}, failed ${r.result.failed}`, { type: r.result.failed ? 'warn' : 'success' });
     await reloadPosts();
   };
   $('#btn-toggle-scheduler').onclick = async () => {
@@ -365,7 +365,7 @@ function renderSidebar() {
   $('#badge-queue').textContent = String(state.posts.filter((p) => p.status === 'queued').length);
 
   if (state.channels.length === 0) {
-    box.append(el('p', { class: 'muted small', style: 'padding:0 6px' }, 'Chưa kết nối kênh nào.'));
+    box.append(el('p', { class: 'muted small', style: 'padding:0 6px' }, 'No accounts connected yet.'));
   }
   for (const ch of state.channels) {
     box.append(el('div', {
@@ -395,15 +395,15 @@ function renderSchedulerStatus() {
   const box = clear($('#scheduler-status'));
   box.append(
     el('span', { class: `dot ${s?.running ? 'on' : 'off'}` }),
-    `Scheduler ${s?.running ? 'đang chạy' : 'đã dừng'}`,
+    `Scheduler ${s?.running ? 'running' : 'paused'}`,
   );
-  if (s?.lastTickAt) box.append(el('div', {}, `Kiểm tra: ${fmtRelative(s.lastTickAt)}`));
+  if (s?.lastTickAt) box.append(el('div', {}, `Last check: ${fmtRelative(s.lastTickAt)}`));
   renderSchedulerButton();
 }
 
 function renderSchedulerButton() {
   const btn = $('#btn-toggle-scheduler');
-  if (btn) btn.textContent = state.scheduler?.running ? 'Tạm dừng' : 'Bật lại';
+  if (btn) btn.textContent = state.scheduler?.running ? 'Pause' : 'Resume';
 }
 
 // ============================================================ composer
@@ -422,10 +422,10 @@ function renderChannelPicker() {
     const chip = el('button', {
       type: 'button',
       class: `channel-chip${selected ? ' selected' : ''}${ch.enabled ? '' : ' chip-disabled'}`,
-      title: ch.enabled ? '' : 'Kênh đang bị tắt',
+      title: ch.enabled ? '' : 'This account is disabled',
       onclick: () => {
         if (!ch.enabled) {
-          toast('Kênh đang bị tắt. Bật lại ở tab Kênh.', { type: 'warn' });
+          toast('This account is disabled. Re-enable it on the Channels tab.', { type: 'warn' });
           return;
         }
         if (state.selectedChannels.has(ch.id)) state.selectedChannels.delete(ch.id);
@@ -449,7 +449,7 @@ function updateCounters() {
   const caption = composeCaptionLocal(title, desc, state.hashtags, $('#in-link').value);
 
   const titleBox = clear($('#counter-title'));
-  titleBox.append(el('span', {}, `${title.length} ký tự`));
+  titleBox.append(el('span', {}, `${title.length} characters`));
   for (const ch of selected) {
     const caps = capsFor(ch.platform);
     const limit = ch.platform === 'youtube' ? caps?.limits?.title : null;
@@ -461,7 +461,7 @@ function updateCounters() {
   }
 
   const descBox = clear($('#counter-description'));
-  descBox.append(el('span', {}, `Caption ghép: ${caption.length} ký tự`));
+  descBox.append(el('span', {}, `Full caption: ${caption.length} characters`));
   for (const ch of selected) {
     const caps = capsFor(ch.platform);
     // Phai tinh theo noi dung THUC SU gui cho kenh nay (co tuy bien rieng).
@@ -534,7 +534,7 @@ function renderHashtags() {
       `#${tag}`,
       el('button', {
         type: 'button',
-        title: 'Xoá',
+        title: 'Remove',
         onclick: () => {
           state.hashtags.splice(i, 1);
           renderHashtags();
@@ -578,7 +578,7 @@ async function handleFiles(files) {
   for (const file of files) {
     const placeholder = el('div', { class: 'media-item' }, [
       el('div', { class: 'media-thumb video-thumb' }, '⏳'),
-      el('div', { class: 'media-meta' }, [el('span', { class: 'fname' }, file.name), el('span', {}, 'đang tải...')]),
+      el('div', { class: 'media-meta' }, [el('span', { class: 'fname' }, file.name), el('span', {}, 'uploading...')]),
       el('div', { class: 'media-progress', style: 'width:0%' }),
     ]);
     $('#media-list').append(placeholder);
@@ -592,7 +592,7 @@ async function handleFiles(files) {
       schedulePreview();
     } catch (err) {
       placeholder.remove();
-      toast(err.message, { type: 'error', title: `Không tải được ${file.name}`, hint: err.hint });
+      toast(err.message, { type: 'error', title: `Could not upload ${file.name}`, hint: err.hint });
     }
   }
   $('#file-input').value = '';
@@ -612,7 +612,7 @@ function renderMedia() {
       thumb,
       el('button', {
         class: 'media-remove',
-        title: 'Bỏ khỏi bài',
+        title: 'Remove from post',
         onclick: () => {
           state.media.splice(i, 1);
           renderMedia();
@@ -696,21 +696,21 @@ function renderPerChannelBody(channel) {
   };
 
   box.append(
-    el('p', { class: 'muted small' }, `Để trống = dùng nội dung chung. Áp dụng riêng cho ${channel.name}.`),
-    el('label', { class: 'field-label' }, 'Tiêu đề riêng'),
+    el('p', { class: 'muted small' }, `Leave empty to use the shared content. Applies to ${channel.name} only.`),
+    el('label', { class: 'field-label' }, 'Custom title'),
     el('input', {
       type: 'text',
       value: per.title ?? '',
-      placeholder: $('#in-title').value || 'Tiêu đề riêng cho kênh này',
+      placeholder: $('#in-title').value || 'Title just for this account',
       oninput: (e) => setVal('title', e.target.value),
     }),
-    el('label', { class: 'field-label' }, 'Nội dung riêng'),
+    el('label', { class: 'field-label' }, 'Custom description'),
     el('textarea', {
       rows: 4,
-      placeholder: 'Nội dung riêng cho kênh này',
+      placeholder: 'Description just for this account',
       oninput: (e) => setVal('description', e.target.value),
     }, per.description ?? ''),
-    el('label', { class: 'field-label' }, 'Hashtag riêng (cách nhau bởi dấu phẩy)'),
+    el('label', { class: 'field-label' }, 'Custom hashtags (comma separated)'),
     el('input', {
       type: 'text',
       value: (per.hashtags ?? []).join(', '),
@@ -722,7 +722,7 @@ function renderPerChannelBody(channel) {
     }),
   );
 
-  box.append(el('label', { class: 'field-label' }, 'Tuỳ chọn nền tảng'));
+  box.append(el('label', { class: 'field-label' }, 'Platform options'));
   box.append(el('div', { class: 'opt-grid' }, platformOptions(channel, per, setVal)));
 }
 
@@ -733,10 +733,10 @@ function renderPerChannelBody(channel) {
  * creator_info.privacy_level_options - bang nay chi de dich sang tieng Viet.
  */
 const TIKTOK_PRIVACY_LABEL = {
-  PUBLIC_TO_EVERYONE: 'Công khai — mọi người',
-  MUTUAL_FOLLOW_FRIENDS: 'Bạn bè — người theo dõi lẫn nhau',
-  FOLLOWER_OF_CREATOR: 'Người theo dõi',
-  SELF_ONLY: 'Chỉ mình tôi — riêng tư',
+  PUBLIC_TO_EVERYONE: 'Public — everyone',
+  MUTUAL_FOLLOW_FRIENDS: 'Friends — mutual followers',
+  FOLLOWER_OF_CREATOR: 'Followers',
+  SELF_ONLY: 'Only me — private',
 };
 
 const TIKTOK_LEGAL = {
@@ -810,8 +810,8 @@ function tiktokOptions(channel, setVal) {
 
     if (draftMode) {
       box.append(el('p', { class: 'tiktok-note muted small' },
-        'Video/ảnh sẽ vào mục nháp trong app TikTok. Bạn tự chọn chế độ hiển thị, '
-        + 'âm thanh và khai báo nội dung ngay trong app trước khi đăng.'));
+        'Your video or photos go to drafts inside the TikTok app. You choose the '
+        + 'viewership, sounds and content disclosure there before posting.'));
       return;
     }
 
@@ -819,8 +819,8 @@ function tiktokOptions(channel, setVal) {
     if (info?.status !== 'ok') {
       box.append(el('p', { class: 'tiktok-note muted small' },
         info?.status === 'loading'
-          ? 'Đang lấy thiết lập tài khoản từ TikTok...'
-          : 'Chưa lấy được thiết lập tài khoản từ TikTok nên chưa dựng được form đăng trực tiếp.'));
+          ? 'Loading your account settings from TikTok...'
+          : 'Could not load your TikTok account settings, so the direct-post form is unavailable.'));
       return;
     }
 
@@ -851,16 +851,16 @@ function tiktokCreatorBanner(channel, info) {
   const handle = data?.username ? '@' + data.username : (channel.username ? '@' + channel.username : '');
 
   const right = [];
-  if (info?.status === 'loading') right.push(el('span', { class: 'muted small' }, 'đang tải...'));
+  if (info?.status === 'loading') right.push(el('span', { class: 'muted small' }, 'loading...'));
   else if (info?.status === 'error') right.push(el('span', { class: 'tiktok-problem small' }, info.error));
   right.push(el('button', {
-    type: 'button', class: 'link-btn', title: 'Lấy lại thiết lập mới nhất từ TikTok',
+    type: 'button', class: 'link-btn', title: 'Reload the latest settings from TikTok',
     onclick: (e) => {
       const host = e.target.closest('.tiktok-opts');
       ensureCreatorInfo(channel.id, { force: true }).then(() => host?._render?.());
       host?._render?.();
     },
-  }, 'làm mới'));
+  }, 'refresh'));
 
   return el('div', { class: 'tiktok-creator' }, [
     avatarNode(channel),
@@ -868,7 +868,7 @@ function tiktokCreatorBanner(channel, info) {
       el('strong', {}, name),
       handle ? el('small', { class: 'muted' }, ' ' + handle) : null,
       data?.maxVideoPostDurationSec
-        ? el('div', { class: 'muted small' }, 'Video tối đa ' + data.maxVideoPostDurationSec + 's cho tài khoản này')
+        ? el('div', { class: 'muted small' }, 'Videos up to ' + data.maxVideoPostDurationSec + 's on this account')
         : null,
     ]),
     el('div', { class: 'tiktok-creator-actions' }, right),
@@ -878,17 +878,17 @@ function tiktokCreatorBanner(channel, info) {
 function tiktokPostModeField(channel, per, mode, setVal) {
   const chanDefault = String(channel.options?.postMode || 'DIRECT_POST').toUpperCase();
   return el('div', { class: 'tiktok-field' }, [
-    el('label', { class: 'field-label' }, 'Kiểu đăng'),
+    el('label', { class: 'field-label' }, 'How to post'),
     el('select', {
       onchange: (e) => setVal('postMode', e.target.value),
     }, [
-      { value: '', label: '(theo kênh: ' + (isTikTokDraftMode(chanDefault) ? 'gửi vào nháp' : 'đăng trực tiếp') + ')' },
-      { value: 'MEDIA_UPLOAD', label: 'Gửi vào nháp — bạn hoàn tất trong app TikTok' },
-      { value: 'DIRECT_POST', label: 'Đăng trực tiếp từ đây' },
+      { value: '', label: '(account default: ' + (isTikTokDraftMode(chanDefault) ? 'send to drafts' : 'publish directly') + ')' },
+      { value: 'MEDIA_UPLOAD', label: 'Send to drafts — you finish in the TikTok app' },
+      { value: 'DIRECT_POST', label: 'Publish directly from here' },
     ].map((o) => el('option', { value: o.value, selected: (per.postMode ?? '') === o.value }, o.label))),
     el('p', { class: 'muted small' }, isTikTokDraftMode(mode)
-      ? 'An toàn nhất: không có gì lên TikTok cho đến khi bạn bấm đăng trong app.'
-      : 'Bài sẽ lên thẳng tài khoản TikTok với thiết lập bên dưới.'),
+      ? 'Safest option: nothing appears on TikTok until you post it yourself in the app.'
+      : 'The post goes straight to your TikTok account with the settings below.'),
   ]);
 }
 
@@ -915,30 +915,30 @@ function tiktokPrivacyField(per, data, setVal) {
   const picked = usable.includes(per.privacyLevel) ? per.privacyLevel : '';
 
   return el('div', { class: 'tiktok-field' }, [
-    el('label', { class: 'field-label' }, 'Ai xem được bài này?'),
+    el('label', { class: 'field-label' }, 'Who can view this post?'),
     el('select', {
       class: picked ? '' : 'needs-pick',
       onchange: (e) => setVal('privacyLevel', e.target.value),
     }, [
-      el('option', { value: '', selected: !picked }, '— Chọn chế độ hiển thị —'),
+      el('option', { value: '', selected: !picked }, '— Select who can view this —'),
       ...usable.map((v) => el('option', {
         value: v, selected: picked === v,
       }, TIKTOK_PRIVACY_LABEL[v] ?? v)),
     ]),
     brandContent && allowed.includes('SELF_ONLY')
-      ? el('p', { class: 'muted small' }, 'Đã ẩn "Chỉ mình tôi": nội dung thương mại không được để riêng tư.')
+      ? el('p', { class: 'muted small' }, '"Only me" is hidden: branded content cannot be private.')
       : null,
     !audited && usable.length > 0
       ? el('p', { class: 'muted small' },
-        'App chưa qua audit nên TikTok chỉ nhận "Chỉ mình tôi", và tài khoản phải '
-        + 'đang ở chế độ private lúc đăng. Muốn lên công khai ngay thì chọn '
-        + 'Kiểu đăng "Gửi vào nháp" rồi tự đăng trong app TikTok.')
+        'This app is not audited yet, so TikTok only accepts "Only me", and your '
+        + 'account must be set to private while posting. To publish publicly right '
+        + 'away, set How to post to "Send to drafts" and post from the TikTok app.')
       : null,
     !audited && usable.length === 0
       ? el('p', { class: 'tiktok-problem' },
-        'App chưa audit chỉ đăng được "Chỉ mình tôi", nhưng chế độ đó lại không dùng '
-        + 'được cùng nội dung có tài trợ. Chuyển Kiểu đăng sang "Gửi vào nháp", hoặc '
-        + 'tắt khai báo tài trợ.')
+        'An unaudited app can only post "Only me", but that viewership cannot be '
+        + 'combined with branded content. Switch How to post to "Send to drafts", or '
+        + 'turn off the branded content disclosure.')
       : null,
   ]);
 }
@@ -955,16 +955,16 @@ function tiktokInteractionFields(per, data, setVal) {
         onchange: (e) => setVal(key, e.target.checked ? true : ''),
       }),
       label,
-      accountOff ? el('small', { class: 'muted' }, ' — đã tắt trong cài đặt tài khoản') : null,
+      accountOff ? el('small', { class: 'muted' }, ' — turned off in your account settings') : null,
     ]);
   };
 
   return el('div', { class: 'tiktok-field' }, [
-    el('label', { class: 'field-label' }, 'Cho phép người xem'),
+    el('label', { class: 'field-label' }, 'Allow viewers to'),
     el('div', { class: 'tiktok-checks' }, [
-      row('disableComment', 'Tắt bình luận', data.commentDisabled),
-      row('disableDuet', 'Tắt Duet', data.duetDisabled),
-      row('disableStitch', 'Tắt Stitch', data.stitchDisabled),
+      row('disableComment', 'Turn off comments', data.commentDisabled),
+      row('disableDuet', 'Turn off Duet', data.duetDisabled),
+      row('disableStitch', 'Turn off Stitch', data.stitchDisabled),
     ]),
   ]);
 }
@@ -986,10 +986,10 @@ function tiktokDisclosureField(per, setVal) {
           if (!e.target.checked) { setVal('brandContentToggle', ''); setVal('brandOrganicToggle', ''); }
         },
       }),
-      'Khai báo nội dung thương mại',
+      'Disclose commercial content',
     ]),
     el('p', { class: 'muted small' },
-      'Bật nếu bài này quảng bá thương hiệu, sản phẩm hoặc dịch vụ — của bạn hoặc của người khác.'),
+      'Turn this on if the post promotes a brand, product or service — yours or someone else\u2019s.'),
   ];
 
   if (on) {
@@ -999,8 +999,8 @@ function tiktokDisclosureField(per, setVal) {
           type: 'checkbox', checked: Boolean(per.brandOrganicToggle),
           onchange: (e) => setVal('brandOrganicToggle', e.target.checked ? true : ''),
         }),
-        'Thương hiệu của tôi',
-        el('small', { class: 'muted' }, ' — bài quảng bá chính bạn hoặc doanh nghiệp của bạn'),
+        'Your brand',
+        el('small', { class: 'muted' }, ' — the post promotes you or your own business'),
       ]),
       el('label', { class: 'checkbox' }, [
         el('input', {
@@ -1012,8 +1012,8 @@ function tiktokDisclosureField(per, setVal) {
             if (v && per.privacyLevel === 'SELF_ONLY') setVal('privacyLevel', '');
           },
         }),
-        'Nội dung có tài trợ',
-        el('small', { class: 'muted' }, ' — bài được thương hiệu khác trả tiền, sẽ gắn nhãn "Paid partnership"'),
+        'Branded content',
+        el('small', { class: 'muted' }, ' — a third-party brand paid for this post; it will be labelled "Paid partnership"'),
       ]),
     ]));
   }
@@ -1026,13 +1026,13 @@ function tiktokConsentText(per) {
   const branded = Boolean(per.brandContentToggle);
   const link = (href, text) => el('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 
-  const parts = [document.createTextNode('Khi bấm đăng, bạn đồng ý với ')];
+  const parts = [document.createTextNode('By posting, you agree to TikTok\u2019s ')];
   if (branded) {
-    parts.push(link(TIKTOK_LEGAL.branded, 'Chính sách nội dung có thương hiệu'));
-    parts.push(document.createTextNode(' và '));
+    parts.push(link(TIKTOK_LEGAL.branded, 'Branded Content Policy'));
+    parts.push(document.createTextNode(' and '));
   }
-  parts.push(link(TIKTOK_LEGAL.music, 'Xác nhận sử dụng âm nhạc'));
-  parts.push(document.createTextNode(' của TikTok.'));
+  parts.push(link(TIKTOK_LEGAL.music, 'Music Usage Confirmation'));
+  parts.push(document.createTextNode('.'));
 
   return el('p', { class: 'tiktok-consent small' }, parts);
 }
@@ -1044,24 +1044,24 @@ function tiktokConsentText(per) {
 function tiktokComplianceError(channel, per, data) {
   if (isTikTokDraftMode(tiktokPostMode(channel, per))) return null;
 
-  if (!per.privacyLevel) return 'Chọn chế độ hiển thị cho TikTok trước khi đăng.';
+  if (!per.privacyLevel) return 'Select who can view your TikTok post before publishing.';
   if (data && Array.isArray(data.privacyLevelOptions) && data.privacyLevelOptions.length > 0
     && !data.privacyLevelOptions.includes(per.privacyLevel)) {
-    return 'Chế độ hiển thị đã chọn không còn khả dụng cho tài khoản này — chọn lại.';
+    return 'The viewership you picked is no longer available on this account — choose again.';
   }
   // Bai nhap luu tu truoc co the con giu gia tri cong khai du app chua audit.
   const audited = Boolean(state.settings?.credentials?.tiktok?.audited);
   if (!audited && per.privacyLevel !== 'SELF_ONLY') {
-    return 'App chưa qua audit nên TikTok chỉ nhận "Chỉ mình tôi". Chọn lại, hoặc '
-      + 'chuyển Kiểu đăng sang "Gửi vào nháp" để tự đăng công khai trong app TikTok.';
+    return 'This app is not audited yet, so TikTok only accepts "Only me". Choose again, '
+      + 'or set How to post to "Send to drafts" and publish publicly from the TikTok app.';
   }
 
   const disclose = Boolean(per.discloseContent || per.brandContentToggle || per.brandOrganicToggle);
   if (disclose && !per.brandContentToggle && !per.brandOrganicToggle) {
-    return 'Đã bật khai báo nội dung thương mại: chọn "Thương hiệu của tôi", "Nội dung có tài trợ", hoặc cả hai.';
+    return 'Commercial content disclosure is on: pick "Your brand", "Branded content", or both.';
   }
   if (per.brandContentToggle && per.privacyLevel === 'SELF_ONLY') {
-    return 'Nội dung có tài trợ không được đặt ở chế độ "Chỉ mình tôi".';
+    return 'Branded content cannot use the "Only me" viewership.';
   }
   return null;
 }
@@ -1088,13 +1088,13 @@ function platformOptions(channel, per, setVal) {
 
   switch (channel.platform) {
     case 'youtube':
-      nodes.push(select('privacyStatus', 'Chế độ hiển thị', [
-        { value: '', label: '(mặc định: private)' },
-        { value: 'private', label: 'Riêng tư' },
-        { value: 'unlisted', label: 'Không công khai' },
-        { value: 'public', label: 'Công khai' },
+      nodes.push(select('privacyStatus', 'Visibility', [
+        { value: '', label: '(default: private)' },
+        { value: 'private', label: 'Private' },
+        { value: 'unlisted', label: 'Unlisted' },
+        { value: 'public', label: 'Public' },
       ], per.privacyStatus));
-      nodes.push(select('categoryId', 'Danh mục', [
+      nodes.push(select('categoryId', 'Category', [
         { value: '', label: '(22 — People & Blogs)' },
         { value: '1', label: '1 — Film & Animation' },
         { value: '10', label: '10 — Music' },
@@ -1103,28 +1103,28 @@ function platformOptions(channel, per, setVal) {
         { value: '24', label: '24 — Entertainment' },
         { value: '28', label: '28 — Science & Technology' },
       ], per.categoryId));
-      nodes.push(check('madeForKids', 'Nội dung cho trẻ em', per.madeForKids));
-      nodes.push(check('notifySubscribers', 'Thông báo cho người đăng ký', per.notifySubscribers));
-      nodes.push(check('asShort', 'Chủ đích là Shorts (cảnh báo nếu không đạt)', per.asShort));
+      nodes.push(check('madeForKids', 'Made for kids', per.madeForKids));
+      nodes.push(check('notifySubscribers', 'Notify subscribers', per.notifySubscribers));
+      nodes.push(check('asShort', 'Intended as a Short (warn if it does not qualify)', per.asShort));
       break;
 
     case 'facebook':
-      nodes.push(check('asReel', 'Đăng dạng Reel', per.asReel));
-      nodes.push(check('noStory', 'Không tạo story trên feed', per.noStory));
-      nodes.push(select('contentCategory', 'Danh mục nội dung', [
-        { value: '', label: '(không đặt)' },
+      nodes.push(check('asReel', 'Post as a Reel', per.asReel));
+      nodes.push(check('noStory', 'Do not create a feed story', per.noStory));
+      nodes.push(select('contentCategory', 'Content category', [
+        { value: '', label: '(not set)' },
         ...['BEAUTY_FASHION', 'ENTERTAINMENT', 'LIFESTYLE', 'TECHNOLOGY', 'OTHER']
           .map((v) => ({ value: v, label: v })),
       ], per.contentCategory));
       break;
 
     case 'instagram':
-      nodes.push(select('target', 'Đăng vào', [
-        { value: '', label: '(tự động: feed/reel)' },
+      nodes.push(select('target', 'Post to', [
+        { value: '', label: '(automatic: feed/reel)' },
         { value: 'story', label: 'Stories' },
       ], per.target));
-      nodes.push(check('shareToFeed', 'Reel cũng hiện ở feed', per.shareToFeed));
-      nodes.push(number('thumbOffset', 'Mốc ảnh bìa (ms)', per.thumbOffset, '0'));
+      nodes.push(check('shareToFeed', 'Also show the Reel in the feed', per.shareToFeed));
+      nodes.push(number('thumbOffset', 'Cover frame (ms)', per.thumbOffset, '0'));
       break;
 
     case 'tiktok':
@@ -1133,18 +1133,18 @@ function platformOptions(channel, per, setVal) {
       break;
 
     case 'telegram':
-      nodes.push(select('parseMode', 'Định dạng', [
-        { value: '', label: '(HTML — an toàn nhất)' },
+      nodes.push(select('parseMode', 'Formatting', [
+        { value: '', label: '(HTML — safest)' },
         { value: 'HTML', label: 'HTML' },
         { value: 'MarkdownV2', label: 'MarkdownV2' },
-        { value: 'none', label: 'Không định dạng' },
+        { value: 'none', label: 'No formatting' },
       ], per.parseMode));
-      nodes.push(select('longCaptionMode', 'Khi caption quá 1024 ký tự', [
-        { value: '', label: '(cắt bớt)' },
-        { value: 'split', label: 'Gửi phần còn lại thành tin nhắn riêng' },
+      nodes.push(select('longCaptionMode', 'When the caption exceeds 1024 characters', [
+        { value: '', label: '(truncate)' },
+        { value: 'split', label: 'Send the remainder as a separate message' },
       ], per.longCaptionMode));
-      nodes.push(check('disableNotification', 'Gửi im lặng', per.disableNotification));
-      nodes.push(check('sendAsDocument', 'Gửi dạng file gốc (giữ nguyên chất lượng)', per.sendAsDocument));
+      nodes.push(check('disableNotification', 'Send silently', per.disableNotification));
+      nodes.push(check('sendAsDocument', 'Send as the original file (keeps full quality)', per.sendAsDocument));
       break;
 
     default:
@@ -1164,7 +1164,7 @@ async function refreshPreview() {
   const box = $('#preview-list');
   const channelIds = [...state.selectedChannels];
   if (channelIds.length === 0) {
-    clear(box).append(el('p', { class: 'muted small' }, 'Chọn kênh để xem trước caption từng nơi.'));
+    clear(box).append(el('p', { class: 'muted small' }, 'Pick an account to preview its caption.'));
     return;
   }
   try {
@@ -1190,9 +1190,9 @@ async function refreshPreview() {
           el('span', { class: 'pill' },
             `${p.captionLength}${p.captionLimit && Number.isFinite(p.captionLimit) ? `/${p.captionLimit}` : ''}`),
         ]),
-        el('pre', { class: 'preview-text' }, p.caption || '(không có caption)'),
-        p.truncated ? el('p', { class: 'muted small', style: 'margin:6px 0 0' }, '⚠️ Caption bị cắt cho vừa giới hạn') : null,
-        p.droppedHashtags > 0 ? el('p', { class: 'muted small', style: 'margin:4px 0 0' }, `⚠️ Bỏ ${p.droppedHashtags} hashtag`) : null,
+        el('pre', { class: 'preview-text' }, p.caption || '(no caption)'),
+        p.truncated ? el('p', { class: 'muted small', style: 'margin:6px 0 0' }, '⚠️ Caption was truncated to fit the limit') : null,
+        p.droppedHashtags > 0 ? el('p', { class: 'muted small', style: 'margin:4px 0 0' }, `⚠️ Dropped ${p.droppedHashtags} hashtag(s)`) : null,
         p.issues?.length
           ? el('ul', { class: 'preview-issues' }, p.issues.map((i) => el('li', { class: i.level === 'error' ? 'issue-error' : 'issue-warn' }, i.message)))
           : null,
@@ -1222,11 +1222,11 @@ function composerPayload(extra = {}) {
 function validateComposer({ needChannels = true } = {}) {
   const p = composerPayload();
   if (!p.title && !p.description && p.mediaIds.length === 0) {
-    toast('Bài đăng đang trống: cần tiêu đề, nội dung hoặc media.', { type: 'warn' });
+    toast('This post is empty — add a title, a description or media.', { type: 'warn' });
     return null;
   }
   if (needChannels && p.channelIds.length === 0) {
-    toast('Chọn ít nhất một kênh.', { type: 'warn' });
+    toast('Select at least one account.', { type: 'warn' });
     return null;
   }
 
@@ -1238,7 +1238,7 @@ function validateComposer({ needChannels = true } = {}) {
     const info = state.creatorInfo[ch.id];
     const problem = tiktokComplianceError(ch, per, info?.status === 'ok' ? info.data : null);
     if (problem) {
-      toast(problem, { type: 'warn', title: 'TikTok — ' + ch.name, hint: 'Mở phần tuỳ chọn riêng của kênh TikTok để sửa.' });
+      toast(problem, { type: 'warn', title: 'TikTok — ' + ch.name, hint: 'Open the per-account settings for this TikTok account to fix it.' });
       openPerChannelTab(ch.id);
       return null;
     }
@@ -1272,28 +1272,28 @@ async function publishNow() {
     }
   }
 
-  setBusy(true, '#btn-publish-now', 'Đang đăng...');
+  setBusy(true, '#btn-publish-now', 'Publishing...');
   try {
     const post = await savePost({ status: 'draft', scheduledAt: null });
     if (!post) return;
     const { report } = await api(`/api/posts/${post.id}/publish`, { method: 'POST', body: {} });
     showReport(report);
     if (report.failed.length === 0) {
-      toast(`Đã đăng lên ${report.succeeded.length} kênh.`, { type: 'success', title: 'Xong' });
+      toast(`Published to ${report.succeeded.length} account(s).`, { type: 'success', title: 'Done' });
       resetComposer();
     } else {
       // Khong reset: giu noi dung de nguoi dung thu lai cac kenh lỗi.
       state.editingPostId = null;
-      toast(`Thành công ${report.succeeded.length}, thất bại ${report.failed.length}.`, {
+      toast(`${report.succeeded.length} succeeded, ${report.failed.length} failed.`, {
         type: 'warn',
-        hint: 'Bấm "Thử lại kênh lỗi" trong bảng kết quả để chỉ đăng lại phần chưa thành công.',
+        hint: 'Use "Retry failed accounts" in the result panel to republish only what did not go through.',
       });
     }
     await reloadPosts();
   } catch (err) {
-    toast(err.message, { type: 'error', title: 'Đăng thất bại', hint: err.hint, timeout: 12000 });
+    toast(err.message, { type: 'error', title: 'Publishing failed', hint: err.hint, timeout: 12000 });
   } finally {
-    setBusy(false, '#btn-publish-now', 'Đăng ngay');
+    setBusy(false, '#btn-publish-now', 'Publish now');
   }
 }
 
@@ -1319,17 +1319,17 @@ async function dryRun() {
   if (state.busy) return;
   const payload = validateComposer();
   if (!payload) return;
-  setBusy(true, '#btn-dry-run', 'Đang chạy...');
+  setBusy(true, '#btn-dry-run', 'Running...');
   try {
     const post = await savePost({ status: 'draft' });
     if (!post) return;
     const { report } = await api(`/api/posts/${post.id}/publish`, { method: 'POST', body: { dryRun: true } });
     showReport(report, { dryRun: true });
-    toast('Chạy thử xong — không gọi API nền tảng nào.', { type: 'info' });
+    toast('Dry run complete — no platform API was called.', { type: 'info' });
   } catch (err) {
-    toast(err.message, { type: 'error', title: 'Chạy thử lỗi', hint: err.hint });
+    toast(err.message, { type: 'error', title: 'Dry run failed', hint: err.hint });
   } finally {
-    setBusy(false, '#btn-dry-run', 'Chạy thử');
+    setBusy(false, '#btn-dry-run', 'Dry run');
   }
 }
 
@@ -1337,25 +1337,25 @@ async function queuePost() {
   if (state.busy) return;
   const when = $('#in-schedule').value;
   if (!when) {
-    toast('Chọn thời điểm đăng trước.', { type: 'warn' });
+    toast('Pick a time to publish first.', { type: 'warn' });
     return;
   }
   const payload = validateComposer();
   if (!payload) return;
-  setBusy(true, '#btn-queue', 'Đang lưu...');
+  setBusy(true, '#btn-queue', 'Saving...');
   try {
     const post = await savePost({ status: 'queued', scheduledAt: new Date(when).toISOString() });
     if (!post) return;
-    toast(`Đã thêm vào hàng đợi: ${fmtDateTime(post.scheduledAt)} (${fmtRelative(post.scheduledAt)})`, {
+    toast(`Added to the queue: ${fmtDateTime(post.scheduledAt)} (${fmtRelative(post.scheduledAt)})`, {
       type: 'success',
-      title: 'Đã lên lịch',
+      title: 'Scheduled',
     });
     resetComposer();
     setView('queue');
   } catch (err) {
-    toast(err.message, { type: 'error', title: 'Không lên lịch được', hint: err.hint });
+    toast(err.message, { type: 'error', title: 'Could not schedule', hint: err.hint });
   } finally {
-    setBusy(false, '#btn-queue', 'Thêm vào hàng đợi');
+    setBusy(false, '#btn-queue', 'Add to queue');
   }
 }
 
@@ -1377,8 +1377,8 @@ function resetComposer() {
 
 function showReport(report, { dryRun = false } = {}) {
   const failedChannels = report.results.filter((r) => !r.ok && !r.skipped).map((r) => r.channel);
-  openModal(dryRun ? 'Kết quả chạy thử' : 'Kết quả đăng bài', el('div', {}, [
-    el('p', { class: 'muted small' }, `${report.succeeded.length} thành công · ${report.failed.length} thất bại · ${report.skipped.length} bỏ qua · ${Math.round(report.durationMs / 100) / 10}s`),
+  openModal(dryRun ? 'Dry run result' : 'Publishing result', el('div', {}, [
+    el('p', { class: 'muted small' }, `${report.succeeded.length} succeeded · ${report.failed.length} failed · ${report.skipped.length} skipped · ${Math.round(report.durationMs / 100) / 10}s`),
     failedChannels.length > 0 && !dryRun
       ? el('button', {
         class: 'btn btn-primary',
@@ -1393,9 +1393,9 @@ function showReport(report, { dryRun = false } = {}) {
           updateCounters();
           void refreshPreview();
           setView('composer');
-          toast(`Đã chọn ${failedChannels.length} kênh lỗi. Bấm "Đăng ngay" để thử lại.`, { type: 'info' });
+          toast(`Selected ${failedChannels.length} failed account(s). Press "Publish now" to retry.`, { type: 'info' });
         },
-      }, `Thử lại ${failedChannels.length} kênh lỗi`)
+      }, `Retry ${failedChannels.length} failed account(s)`)
       : null,
     ...report.results.map((r) => {
       const ch = state.channels.find((c) => c.id === r.channel);
@@ -1403,7 +1403,7 @@ function showReport(report, { dryRun = false } = {}) {
         el('div', { class: 'preview-head' }, [
           ch ? avatarNode(ch) : null,
           ch?.name ?? r.channel,
-          el('span', { class: 'pill' }, r.ok ? (r.skipped ? 'bỏ qua' : 'thành công') : 'lỗi'),
+          el('span', { class: 'pill' }, r.ok ? (r.skipped ? 'skipped' : 'succeeded') : 'failed'),
         ]),
         r.url ? el('p', { style: 'margin:4px 0' }, [el('a', { href: r.url, target: '_blank', rel: 'noreferrer' }, r.url)]) : null,
         r.preview ? el('pre', { class: 'preview-text' }, r.preview) : null,
@@ -1424,10 +1424,10 @@ async function loadSlots() {
     const { slots } = await api('/api/schedule/slots?count=8');
     const box = clear($('#slot-suggestions'));
     if (!slots?.length) {
-      box.append(el('span', { class: 'muted small' }, 'Chưa cấu hình khung giờ đăng (tab Cài đặt).'));
+      box.append(el('span', { class: 'muted small' }, 'No posting times configured yet (Settings tab).'));
       return;
     }
-    box.append(el('span', { class: 'muted small', style: 'align-self:center' }, 'Gợi ý:'));
+    box.append(el('span', { class: 'muted small', style: 'align-self:center' }, 'Suggested:'));
     for (const iso of slots) {
       box.append(el('button', {
         type: 'button',
@@ -1468,8 +1468,8 @@ function renderQueue() {
   if (queued.length === 0) {
     box.append(el('div', { class: 'empty-state' }, [
       el('span', { class: 'icon' }, '🗓️'),
-      el('p', {}, 'Hàng đợi trống.'),
-      el('p', { class: 'small' }, 'Soạn bài rồi bấm "Thêm vào hàng đợi" để tự đăng đúng giờ.'),
+      el('p', {}, 'The queue is empty.'),
+      el('p', { class: 'small' }, 'Compose a post and press "Add to queue" to publish it at the time you pick.'),
     ]));
     return;
   }
@@ -1495,7 +1495,7 @@ function renderHistory() {
   if (items.length === 0) {
     box.append(el('div', { class: 'empty-state' }, [
       el('span', { class: 'icon' }, '📜'),
-      el('p', {}, 'Chưa có bài nào.'),
+      el('p', {}, 'Nothing published yet.'),
     ]));
     return;
   }
@@ -1504,7 +1504,7 @@ function renderHistory() {
 
 function postCard(post, { queue = false, history = false } = {}) {
   const channels = post.channelIds.map((id) => state.channels.find((c) => c.id === id)).filter(Boolean);
-  const title = post.content?.title || post.content?.description?.slice(0, 70) || '(không có tiêu đề)';
+  const title = post.content?.title || post.content?.description?.slice(0, 70) || '(untitled)';
 
   const actions = [];
   if (queue) {
@@ -1513,33 +1513,33 @@ function postCard(post, { queue = false, history = false } = {}) {
       onclick: async () => {
         try {
           await api(`/api/posts/${post.id}/publish`, { method: 'POST', body: {} });
-          toast('Đã đăng.', { type: 'success' });
+          toast('Published.', { type: 'success' });
           await reloadPosts();
         } catch (err) {
           toast(err.message, { type: 'error', hint: err.hint });
         }
       },
-    }, 'Đăng ngay'));
+    }, 'Publish now'));
   }
-  actions.push(el('button', { class: 'btn btn-sm', onclick: () => loadIntoComposer(post) }, 'Sửa'));
+  actions.push(el('button', { class: 'btn btn-sm', onclick: () => loadIntoComposer(post) }, 'Edit'));
   if (history) {
     actions.push(el('button', {
       class: 'btn btn-sm',
       onclick: async () => {
         const { post: copy } = await api(`/api/posts/${post.id}/duplicate`, { method: 'POST' });
         loadIntoComposer(copy);
-        toast('Đã tạo bản sao.', { type: 'info' });
+        toast('Duplicate created.', { type: 'info' });
       },
-    }, 'Nhân bản'));
+    }, 'Duplicate'));
   }
   actions.push(el('button', {
     class: 'btn btn-sm btn-danger',
     onclick: async () => {
-      if (!confirm('Xoá bài đăng này?')) return;
+      if (!confirm('Delete this post?')) return;
       await api(`/api/posts/${post.id}`, { method: 'DELETE' });
       await reloadPosts();
     },
-  }, 'Xoá'));
+  }, 'Delete'));
 
   const results = post.report?.results ?? [];
 
@@ -1551,7 +1551,7 @@ function postCard(post, { queue = false, history = false } = {}) {
         post.scheduledAt ? el('span', {}, `🕒 ${fmtDateTime(post.scheduledAt)} (${fmtRelative(post.scheduledAt)})`) : null,
         post.publishedAt ? el('span', {}, `✅ ${fmtDateTime(post.publishedAt)}`) : null,
         post.mediaIds?.length ? el('span', {}, `📎 ${post.mediaIds.length} media`) : null,
-        post.attempts > 1 ? el('span', {}, `🔁 thử ${post.attempts} lần`) : null,
+        post.attempts > 1 ? el('span', {}, `🔁 ${post.attempts} attempts`) : null,
       ]),
       el('div', { class: 'post-channels' }, channels.map((c) => avatarNode(c))),
       post.note ? el('p', { class: 'muted small', style: 'margin:7px 0 0' }, post.note) : null,
@@ -1562,7 +1562,7 @@ function postCard(post, { queue = false, history = false } = {}) {
             el('div', { class: 'result-row' }, [
               el('span', { class: r.skipped ? 'skip' : (r.ok ? 'ok' : 'fail') }, r.skipped ? '○' : (r.ok ? '✓' : '✕')),
               el('strong', {}, ch?.name ?? r.channel),
-              r.url ? el('a', { href: r.url, target: '_blank', rel: 'noreferrer' }, 'xem bài') : null,
+              r.url ? el('a', { href: r.url, target: '_blank', rel: 'noreferrer' }, 'view post') : null,
               r.status ? el('span', { class: 'muted small' }, r.status) : null,
               r.error ? el('span', { class: 'fail small' }, r.error.message) : null,
               r.reason ? el('span', { class: 'muted small' }, r.reason) : null,
@@ -1578,13 +1578,13 @@ function postCard(post, { queue = false, history = false } = {}) {
 
 function statusLabel(status) {
   return {
-    draft: 'nháp',
-    queued: 'chờ đăng',
-    publishing: 'đang đăng',
-    posted: 'đã đăng',
-    partial: 'một phần',
-    failed: 'thất bại',
-    cancelled: 'đã huỷ',
+    draft: 'draft',
+    queued: 'queued',
+    publishing: 'publishing',
+    posted: 'published',
+    partial: 'partial',
+    failed: 'failed',
+    cancelled: 'cancelled',
   }[status] ?? status;
 }
 
@@ -1596,10 +1596,10 @@ async function loadIntoComposer(post) {
     const { media } = await api('/api/media');
     mediaList = (post.mediaIds ?? []).map((id) => media.find((m) => m.id === id)).filter(Boolean);
     if (mediaList.length !== (post.mediaIds ?? []).length) {
-      toast('Một số media của bài này đã bị xoá khỏi server.', { type: 'warn' });
+      toast('Some media from this post is no longer on the server.', { type: 'warn' });
     }
   } catch (err) {
-    toast(err.message, { type: 'error', title: 'Không nạp được media của bài' });
+    toast(err.message, { type: 'error', title: 'Could not load this post\u2019s media' });
     return;
   }
 
@@ -1621,7 +1621,7 @@ async function loadIntoComposer(post) {
   updateCounters();
   setView('composer');
   void refreshPreview();
-  toast('Đã nạp bài vào trình soạn.', { type: 'info' });
+  toast('Post loaded into the composer.', { type: 'info' });
 }
 
 // ============================================================ channels view
@@ -1634,10 +1634,10 @@ function renderProviders() {
       el('h3', {}, p.label),
       el('div', {}, [
         el('span', { class: p.configured ? 'tag-configured' : 'tag-not-configured' },
-          p.configured ? '● Đã cấu hình app' : '○ Chưa cấu hình app OAuth'),
+          p.configured ? '● App configured' : '○ Developer app not configured'),
       ]),
       el('p', { class: 'muted small', style: 'margin:6px 0' },
-        connected.length ? `Đã kết nối ${connected.length} kênh` : 'Chưa kết nối kênh nào'),
+        connected.length ? `${connected.length} account(s) connected` : 'No accounts connected'),
       el('div', { class: 'redirect-box' }, [
         el('span', { title: p.redirectUri }, p.redirectUri),
         el('button', {
@@ -1645,7 +1645,7 @@ function renderProviders() {
           title: 'Copy',
           onclick: () => {
             void navigator.clipboard?.writeText(p.redirectUri);
-            toast('Đã copy Redirect URI.', { type: 'info', timeout: 2200 });
+            toast('Redirect URI copied.', { type: 'info', timeout: 2200 });
           },
         }, '⧉'),
       ]),
@@ -1658,11 +1658,11 @@ function renderProviders() {
             const { url } = await api(`/api/oauth/${p.id}/start`, { method: 'POST', body: {} });
             location.href = url;
           } catch (err) {
-            toast(err.message, { type: 'error', title: 'Không mở được trang cấp quyền', hint: err.hint });
+            toast(err.message, { type: 'error', title: 'Could not open the sign-in page', hint: err.hint });
           }
         },
-      }, p.configured ? `Kết nối ${p.label}` : 'Cần cấu hình ở tab Cài đặt'),
-      el('p', { class: 'muted small', style: 'margin-top:8px' }, `Quyền: ${p.scopes.join(', ')}`),
+      }, p.configured ? `Connect ${p.label}` : 'Configure it on the Settings tab first'),
+      el('p', { class: 'muted small', style: 'margin-top:8px' }, `Permissions: ${p.scopes.join(', ')}`),
     ]));
   }
 }
@@ -1687,7 +1687,7 @@ function renderChannelCards() {
           el('input', {
             type: 'checkbox',
             checked: ch.enabled,
-            title: 'Bật/tắt kênh',
+            title: 'Enable or disable this account',
             onchange: async (e) => {
               await api(`/api/channels/${ch.id}`, { method: 'PATCH', body: { enabled: e.target.checked } });
               await refreshState();
@@ -1696,14 +1696,14 @@ function renderChannelCards() {
         ]),
       ]),
       el('div', { class: 'channel-facts' }, [
-        el('span', {}, `Kết nối: ${fmtDateTime(ch.connectedAt)}`),
-        ch.lastUsedAt ? el('span', {}, `Đăng gần nhất: ${fmtRelative(ch.lastUsedAt)}`) : null,
-        ch.credentials?.target ? el('span', {}, `Đích: ${ch.credentials.target}`) : null,
-        caps ? el('span', {}, `Hỗ trợ: ${[caps.text && 'text', caps.image && 'ảnh', caps.video && 'video', caps.album && 'album'].filter(Boolean).join(', ')}`) : null,
-        ch.credentials?.hasRefreshToken ? el('span', {}, '🔑 có refresh token (tự gia hạn)') : null,
+        el('span', {}, `Connected: ${fmtDateTime(ch.connectedAt)}`),
+        ch.lastUsedAt ? el('span', {}, `Last used: ${fmtRelative(ch.lastUsedAt)}`) : null,
+        ch.credentials?.target ? el('span', {}, `Target: ${ch.credentials.target}`) : null,
+        caps ? el('span', {}, `Supports: ${[caps.text && 'text', caps.image && 'photo', caps.video && 'video', caps.album && 'album'].filter(Boolean).join(', ')}`) : null,
+        ch.credentials?.hasRefreshToken ? el('span', {}, '🔑 refresh token saved (renews itself)') : null,
       ]),
       ch.lastError ? el('div', { class: 'channel-error' }, [
-        el('strong', {}, 'Lỗi gần nhất: '),
+        el('strong', {}, 'Last error: '),
         ch.lastError.message,
       ]) : null,
       el('div', { class: 'channel-card-actions' }, [
@@ -1712,22 +1712,22 @@ function renderChannelCards() {
           onclick: async (e) => {
             const btn = e.target;
             btn.disabled = true;
-            btn.textContent = 'Đang kiểm tra...';
+            btn.textContent = 'Checking...';
             try {
               const { result } = await api(`/api/channels/${ch.id}/verify`, { method: 'POST' });
-              if (result.ok) toast(`${ch.name}: token còn hiệu lực.`, { type: 'success' });
-              else toast(result.error ?? 'Token không dùng được', { type: 'error', title: ch.name, hint: result.hint, timeout: 12000 });
+              if (result.ok) toast(`${ch.name}: credentials are still valid.`, { type: 'success' });
+              else toast(result.error ?? 'These credentials no longer work', { type: 'error', title: ch.name, hint: result.hint, timeout: 12000 });
             } finally {
               btn.disabled = false;
-              btn.textContent = 'Kiểm tra';
+              btn.textContent = 'Check';
               await refreshState();
             }
           },
-        }, 'Kiểm tra'),
+        }, 'Check'),
         el('button', {
           class: 'btn btn-sm',
           disabled: !ch.enabled,
-          title: ch.enabled ? '' : 'Kênh đang bị tắt',
+          title: ch.enabled ? '' : 'This account is disabled',
           onclick: () => {
             if (!ch.enabled) return;
             state.selectedChannels.add(ch.id);
@@ -1737,16 +1737,16 @@ function renderChannelCards() {
             void refreshPreview();
             setView('composer');
           },
-        }, 'Soạn bài'),
+        }, 'Compose'),
         el('button', {
           class: 'btn btn-sm btn-danger',
           onclick: async () => {
-            if (!confirm(`Ngắt kết nối "${ch.name}"? Token sẽ bị xoá khỏi máy.`)) return;
+            if (!confirm(`Disconnect "${ch.name}"? Its tokens will be deleted from this computer.`)) return;
             await api(`/api/channels/${ch.id}`, { method: 'DELETE' });
-            toast('Đã ngắt kết nối.', { type: 'info' });
+            toast('Disconnected.', { type: 'info' });
             await refreshState();
           },
-        }, 'Ngắt kết nối'),
+        }, 'Disconnect'),
       ]),
     ]));
   }
@@ -1761,27 +1761,27 @@ async function connectTelegram(e) {
       method: 'POST',
       body: { botToken: $('#tg-token').value.trim(), chatId: $('#tg-chat').value.trim() },
     });
-    toast(`Đã kết nối "${channel.name}".`, { type: 'success' });
+    toast(`Connected "${channel.name}".`, { type: 'success' });
     $('#tg-token').value = '';
     $('#tg-chat').value = '';
     await refreshState();
   } catch (err) {
-    toast(err.message, { type: 'error', title: 'Kết nối Telegram thất bại', hint: err.hint, timeout: 12000 });
+    toast(err.message, { type: 'error', title: 'Could not connect Telegram', hint: err.hint, timeout: 12000 });
   } finally {
     btn.disabled = false;
   }
 }
 
 async function verifyAll() {
-  toast('Đang kiểm tra tất cả kênh...', { type: 'info', timeout: 2500 });
+  toast('Checking every account...', { type: 'info', timeout: 2500 });
   try {
     const { results } = await api('/api/channels/verify', { method: 'POST' });
     const bad = Object.entries(results).filter(([, r]) => !r.ok);
-    if (bad.length === 0) toast('Tất cả kênh đều hoạt động.', { type: 'success' });
+    if (bad.length === 0) toast('Every account is working.', { type: 'success' });
     else {
       for (const [id, r] of bad) {
         const ch = state.channels.find((c) => c.id === id);
-        toast(r.error ?? 'lỗi', { type: 'error', title: ch?.name ?? id, hint: r.hint, timeout: 14000 });
+        toast(r.error ?? 'error', { type: 'error', title: ch?.name ?? id, hint: r.hint, timeout: 14000 });
       }
     }
     await refreshState();
@@ -1819,9 +1819,9 @@ function fillSettings() {
         ]));
         if (f.key === 'audited') {
           box.append(el('p', { class: 'muted small' },
-            'Để tắt khi app chưa qua audit: TikTok chỉ cho đăng chế độ "Chỉ mình tôi", '
-            + 'và tài khoản phải đang ở chế độ private lúc đăng. Bật lên sau khi TikTok '
-            + 'duyệt app, lúc đó mới đăng công khai được.'));
+            'Leave this off while your app is unaudited: TikTok then only accepts the '
+            + '"Only me" viewership, and your account must be private while posting. '
+            + 'Turn it on once TikTok approves the app and public posting is allowed.'));
         }
         continue;
       }
@@ -1830,13 +1830,13 @@ function fillSettings() {
         type: f.secret ? 'password' : 'text',
         id: `cred-${p.id}-${f.key}`,
         value: s.credentials?.[p.id]?.[f.key] ?? '',
-        placeholder: f.secret ? '(để trống nếu không đổi)' : f.label,
+        placeholder: f.secret ? '(leave empty to keep the saved value)' : f.label,
       }));
       if (f.key === 'redirectUri') {
         box.append(el('p', { class: 'muted small' },
-          'Để trống thì app dùng địa chỉ web admin. Đặt giá trị ở đây khi nền tảng '
-          + 'không nhận callback http://127.0.0.1 — TikTok production đòi https, '
-          + 'còn app ở chế độ Sandbox thì nhận cả http.'));
+          'Leave empty and the app uses the address you opened this page on. Set a value '
+          + 'when the platform rejects an http://127.0.0.1 callback — TikTok requires https '
+          + 'in production, while a Sandbox app accepts http too.'));
       }
     }
   }
@@ -1899,7 +1899,7 @@ async function saveSettings() {
   try {
     const { settings } = await api('/api/settings', { method: 'PUT', body });
     state.settings = settings;
-    toast('Đã lưu cài đặt.', { type: 'success' });
+    toast('Settings saved.', { type: 'success' });
     await refreshState();
   } catch (err) {
     toast(err.message, { type: 'error', hint: err.hint });
@@ -1919,7 +1919,7 @@ function connectEvents() {
   };
   es.onerror = () => {
     // EventSource tự kết nối lại; chỉ ghi nhận.
-    pushActivity({ level: 'warn', msg: 'Mất kết nối luồng sự kiện, đang thử lại...' });
+    pushActivity({ level: 'warn', msg: 'Event stream disconnected, retrying...' });
   };
 }
 
@@ -1930,7 +1930,7 @@ function handleEvent(evt) {
       pushActivity({ level: data.level, msg: data.msg, meta: data.meta, at });
       break;
     case 'channel:start':
-      pushActivity({ level: 'info', msg: `→ đang gửi tới ${channelName(data.channelId)}`, at });
+      pushActivity({ level: 'info', msg: `→ sending to ${channelName(data.channelId)}`, at });
       break;
     case 'channel:done':
       pushActivity({ level: 'ok', msg: `✓ ${channelName(data.channelId)}${data.url ? ` — ${data.url}` : ''}`, at });
@@ -1939,11 +1939,11 @@ function handleEvent(evt) {
       pushActivity({ level: 'error', msg: `✕ ${channelName(data.channelId)}: ${data.message}`, at });
       break;
     case 'post:done':
-      pushActivity({ level: data.failed?.length ? 'warn' : 'ok', msg: `Xong: ${data.succeeded.length} thành công, ${data.failed.length} lỗi`, at });
+      pushActivity({ level: data.failed?.length ? 'warn' : 'ok', msg: `Done: ${data.succeeded.length} succeeded, ${data.failed.length} failed`, at });
       void reloadPosts();
       break;
     case 'post:retry':
-      pushActivity({ level: 'warn', msg: `Lùi lịch: ${data.message}`, at });
+      pushActivity({ level: 'warn', msg: `Rescheduled: ${data.message}`, at });
       void reloadPosts();
       break;
     case 'channels:changed':
@@ -1996,7 +1996,7 @@ function closeModal() {
 
 boot().catch((err) => {
   document.body.innerHTML = `<div style="padding:40px;font-family:sans-serif">
-    <h1>Không khởi động được giao diện</h1>
+    <h1>The interface failed to start</h1>
     <pre style="white-space:pre-wrap">${String(err?.stack ?? err)}</pre>
   </div>`;
 });

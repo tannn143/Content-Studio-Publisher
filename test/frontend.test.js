@@ -351,11 +351,11 @@ test('tiktok UX: danh sach privacy chi dung tu creator_info, khong hard-code', (
 
 test('tiktok UX: khong duoc chon san che do hien thi', () => {
   assert.ok(
-    appCode.includes('— Chọn chế độ hiển thị —'),
+    appCode.includes('— Select who can view this —'),
     'phai co option rong bat creator tu chon privacy level',
   );
   assert.ok(
-    appCode.includes("return 'Chọn chế độ hiển thị cho TikTok trước khi đăng.'"),
+    appCode.includes('Select who can view your TikTok post before publishing.'),
     'chua chon privacy level thi phai chan dang',
   );
 });
