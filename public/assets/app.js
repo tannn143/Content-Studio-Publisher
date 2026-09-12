@@ -48,6 +48,24 @@ const PLATFORM_ICON = {
   telegram: '✈️',
 };
 
+/**
+ * TAM THOI: chi hien mot so nen tang trong giao dien.
+ *
+ * Dung de quay video demo cho TikTok app review - reviewer chi can thay
+ * duy nhat luong TikTok, khong bi phan tan boi cac kenh khac.
+ *
+ * DE HIEN LAI TAT CA: dat VISIBLE_PLATFORMS = null.
+ *
+ * Chi loc o tang hien thi. Backend, adapter va du lieu da luu khong doi -
+ * cac kenh khac van con nguyen, chi la khong ve ra.
+ */
+const VISIBLE_PLATFORMS = ['tiktok'];
+
+/** @param {string} platform */
+function isPlatformVisible(platform) {
+  return !VISIBLE_PLATFORMS || VISIBLE_PLATFORMS.includes(platform);
+}
+
 const PLATFORM_LABEL = {
   youtube: 'YouTube',
   facebook: 'Facebook',
@@ -253,9 +271,13 @@ async function startApp() {
 
 async function refreshState() {
   const data = await api('/api/state');
-  state.channels = data.channels;
-  state.platforms = data.platforms;
-  state.providers = data.providers;
+  // Loc theo VISIBLE_PLATFORMS: lam o day thay vi trong tung ham render de
+  // khong the bo sot cho nao.
+  state.channels = data.channels.filter((c) => isPlatformVisible(c.platform));
+  state.platforms = data.platforms.filter((p) => isPlatformVisible(p.platform));
+  state.providers = data.providers.filter((p) => p.platforms.some(isPlatformVisible));
+  // Card ket noi Telegram nam san trong HTML nen phai an rieng.
+  $('#card-telegram')?.classList.toggle('hidden', !isPlatformVisible('telegram'));
   state.settings = data.settings;
   state.posts = data.posts;
   state.scheduler = data.scheduler;
