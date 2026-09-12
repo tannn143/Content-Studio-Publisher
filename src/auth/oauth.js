@@ -46,11 +46,11 @@ export const OAUTH_PROVIDERS = {
     credentialFields: [
       { key: 'clientId', label: 'Client ID', required: true },
       { key: 'clientSecret', label: 'Client Secret', required: true, secret: true },
-      { key: 'redirectUri', label: 'Redirect URI (để trống = tự suy ra từ địa chỉ web admin)', hint: true },
+      { key: 'redirectUri', label: 'Redirect URI (leave empty to use this admin address)', hint: true },
     ],
     scopes: OAUTH_SCOPES.google,
-    setupHint: 'Google Cloud Console > APIs & Services: bat "YouTube Data API v3", tao OAuth Client ID (Web application), '
-      + 'them Authorized redirect URI dung bang URL callback ben duoi. LUU Y: app o che do Testing thi refresh token het han sau 7 ngay.',
+    setupHint: 'Google Cloud Console > APIs & Services: enable "YouTube Data API v3", create an OAuth Client ID (Web application), '
+      + 'and add an Authorized redirect URI exactly equal to the callback URL below. NOTE: while the app is in Testing mode, refresh tokens expire after 7 days.',
   },
   facebook: {
     id: 'facebook',
@@ -59,11 +59,11 @@ export const OAUTH_PROVIDERS = {
     credentialFields: [
       { key: 'appId', label: 'App ID', required: true },
       { key: 'appSecret', label: 'App Secret', required: true, secret: true },
-      { key: 'redirectUri', label: 'Redirect URI (để trống = tự suy ra từ địa chỉ web admin)', hint: true },
+      { key: 'redirectUri', label: 'Redirect URI (leave empty to use this admin address)', hint: true },
     ],
     scopes: OAUTH_SCOPES.facebook,
-    setupHint: 'developers.facebook.com > App > Facebook Login: them Valid OAuth Redirect URI dung bang URL callback. '
-      + 'Instagram phai la tai khoan Business/Creator va da lien ket voi Page. Cac quyen nay can App Review khi dung cho nguoi ngoai.',
+    setupHint: 'developers.facebook.com > App > Facebook Login: add a Valid OAuth Redirect URI exactly equal to the callback URL. '
+      + 'Instagram must be a Business/Creator account already linked to the Page. These permissions need App Review before anyone outside the app can use them.',
   },
   tiktok: {
     id: 'tiktok',
@@ -72,18 +72,18 @@ export const OAUTH_PROVIDERS = {
     credentialFields: [
       { key: 'clientKey', label: 'Client Key', required: true },
       { key: 'clientSecret', label: 'Client Secret', required: true, secret: true },
-      { key: 'redirectUri', label: 'Redirect URI (de trong = dung dia chi web admin)', hint: true },
+      { key: 'redirectUri', label: 'Redirect URI (leave empty to use this admin address)', hint: true },
       // App chua audit chi dang duoc SELF_ONLY -> UI dua vao co nay de khoi
       // moi nguoi dung chon che do chac chan bi tu choi.
-      { key: 'audited', label: 'App da qua audit cua TikTok (cho dang cong khai)', type: 'boolean' },
+      { key: 'audited', label: 'This app has passed TikTok audit (public posting allowed)', type: 'boolean' },
     ],
     scopes: OAUTH_SCOPES.tiktok,
     // Sandbox nhan http/localhost; app production thi TikTok doi https -> luc do
     // dat redirectUri tro toi trang cau noi https (docs/oauth-bridge).
-    setupHint: 'developers.tiktok.com > App: bat san pham "Content Posting API", them Redirect URI dung bang URL callback. '
-      + 'App o che do Sandbox nhan ca http://127.0.0.1; khi chuyen sang production TikTok doi https - '
-      + 'luc do dung trang cau noi https (xem docs/setup-tiktok-telegram.md). '
-      + 'App CHUA duoc audit chi dang duoc che do SELF_ONLY (rieng tu).',
+    setupHint: 'developers.tiktok.com > App: enable the "Content Posting API" product and add a Redirect URI exactly equal to the callback URL. '
+      + 'A Sandbox app accepts http://127.0.0.1; once it moves to production TikTok requires https - '
+      + 'use the https bridge page then (see docs/setup-tiktok-telegram.md). '
+      + 'An app that has NOT passed audit can only post with SELF_ONLY viewership.',
   },
 };
 
@@ -128,14 +128,14 @@ export class OAuthManager {
   async createAuthUrl(provider, opts) {
     this._gc();
     const p = OAUTH_PROVIDERS[provider];
-    if (!p) throw new ConfigError(`Khong ho tro OAuth provider '${provider}'`);
+    if (!p) throw new ConfigError(`Unsupported OAuth provider '${provider}'`);
 
     const creds = (await this.getCredentials())?.[provider] ?? {};
     const missing = p.credentialFields.filter((f) => f.required && !creds[f.key]).map((f) => f.label);
     if (missing.length > 0) {
       throw new ConfigError(
-        `Chua cau hinh ${p.label}: thieu ${missing.join(', ')}`,
-        { hint: 'Vao tab "Cai dat" de nhap thong tin app OAuth.' },
+        `${p.label} is not configured yet: missing ${missing.join(', ')}`,
+        { hint: 'Open the Settings tab and fill in your developer app credentials.' },
       );
     }
 
@@ -212,8 +212,8 @@ export class OAuthManager {
     this._gc();
     const entry = this.pending.get(opts.state);
     if (!entry) {
-      throw new AuthError('State khong hop le hoac da het han. Hay bam "Ket noi" lai.', {
-        hint: 'State song 10 phut. Cung khong duoc mo lai link callback cu.',
+      throw new AuthError('The sign-in state is invalid or has expired. Press "Connect" again.', {
+        hint: 'A state is valid for 10 minutes and cannot be reused by reopening an old callback link.',
       });
     }
     this.pending.delete(opts.state);
@@ -244,16 +244,16 @@ export class OAuthManager {
     });
     if (!token.ok || !token.data?.access_token) {
       throw new AuthError(
-        `Google tu choi doi code: ${token.data?.error ?? token.status} ${token.data?.error_description ?? ''}`,
-        { details: token.data, hint: 'Kiem tra redirect URI da khai bao trong Google Cloud Console co khop chinh xac.' },
+        `Google rejected the code exchange: ${token.data?.error ?? token.status} ${token.data?.error_description ?? ''}`,
+        { details: token.data, hint: 'Check that the redirect URI declared in Google Cloud Console matches exactly.' },
       );
     }
     if (!token.data.refresh_token) {
       throw new AuthError(
-        'Google khong tra ve refresh_token nen khong the dang bai tu dong lau dai.',
+        'Google did not return a refresh_token, so long-term publishing is not possible.',
         {
-          hint: 'Can access_type=offline va prompt=consent. Neu ban da cap quyen truoc do, '
-            + 'hay vao myaccount.google.com/permissions xoa quyen cua app roi ket noi lai.',
+          hint: 'This needs access_type=offline and prompt=consent. If you granted access before, '
+            + 'remove the app at myaccount.google.com/permissions and connect again.',
         },
       );
     }
@@ -267,9 +267,9 @@ export class OAuthManager {
     });
     const ch = info.data?.items?.[0];
     if (!ch) {
-      throw new PlatformError('Tai khoan Google nay chua co channel YouTube', {
+      throw new PlatformError('This Google account has no YouTube channel yet', {
         platform: 'youtube',
-        hint: 'Tao channel tai youtube.com roi ket noi lai.',
+        hint: 'Create a channel at youtube.com, then connect again.',
       });
     }
 
@@ -307,8 +307,8 @@ export class OAuthManager {
     });
     if (!short.ok || !short.data?.access_token) {
       throw new AuthError(
-        `Facebook tu choi doi code: ${short.data?.error?.message ?? short.status}`,
-        { details: short.data, hint: 'Kiem tra Valid OAuth Redirect URI trong cai dat Facebook Login.' },
+        `Facebook rejected the code exchange: ${short.data?.error?.message ?? short.status}`,
+        { details: short.data, hint: 'Check the Valid OAuth Redirect URI in your Facebook Login settings.' },
       );
     }
 
@@ -325,7 +325,7 @@ export class OAuthManager {
     });
     const userToken = long.data?.access_token ?? short.data.access_token;
     if (!long.data?.access_token) {
-      this.logger?.warn('khong doi duoc user token dai han - Page token co the het han sau 1-2 gio');
+      this.logger?.warn('could not exchange for a long-lived user token - Page tokens may expire in 1-2 hours');
     }
 
     // B3: liet ke Page + IG account lien ket
@@ -340,13 +340,13 @@ export class OAuthManager {
     });
     if (!pages.ok || !Array.isArray(pages.data?.data)) {
       throw new AuthError(
-        `Khong lay duoc danh sach Page: ${pages.data?.error?.message ?? pages.status}`,
-        { details: pages.data, hint: 'Can quyen pages_show_list va user phai co role tren Page.' },
+        `Could not load your Page list: ${pages.data?.error?.message ?? pages.status}`,
+        { details: pages.data, hint: 'This needs the pages_show_list permission, and the user must hold a role on the Page.' },
       );
     }
     if (pages.data.data.length === 0) {
-      throw new AuthError('Tai khoan nay khong quan ly Page nao', {
-        hint: 'Tao Facebook Page hoac yeu cau duoc cap role tren Page.',
+      throw new AuthError('This account does not manage any Page', {
+        hint: 'Create a Facebook Page, or ask to be given a role on one.',
       });
     }
 
@@ -361,7 +361,7 @@ export class OAuthManager {
         avatar: page.picture?.data?.url,
         externalId: page.id,
         authProvider: 'facebook',
-        warning: canPost ? undefined : 'Thieu quyen CREATE_CONTENT tren Page nay',
+        warning: canPost ? undefined : 'The CREATE_CONTENT task is missing on this Page',
         config: {
           pageId: page.id,
           pageAccessToken: page.access_token,
@@ -424,16 +424,16 @@ export class OAuthManager {
     });
     if (!token.ok || !token.data?.access_token) {
       throw new AuthError(
-        `TikTok tu choi doi code: ${token.data?.error ?? token.status} ${token.data?.error_description ?? ''}`,
+        `TikTok rejected the code exchange: ${token.data?.error ?? token.status} ${token.data?.error_description ?? ''}`,
         {
           details: token.data,
           // TikTok khong noi field nao sai -> in ra du lieu doi chieu duoc.
-          hint: 'Doi chieu: redirect_uri vua gui la '
-            + `'${entry.redirectUri}' - phai TRUNG TUNG KY TU voi Redirect URI khai bao `
-            + `trong app TikTok. client_key dang dung: '${clientKey}'. `
-            + `PKCE: ${entry.codeVerifier ? 'co gui code_verifier' : 'KHONG gui code_verifier'}. `
-            + `${token.data?.log_id ? `log_id=${token.data.log_id} (dua ma nay cho TikTok support). ` : ''}`
-            + 'Neu client_key/secret vua copy lai thi luu lai trong tab Cai dat roi thu lai.',
+          hint: 'Compare these: the redirect_uri just sent was '
+            + `'${entry.redirectUri}' - it must match the Redirect URI declared in your `
+            + `TikTok app CHARACTER FOR CHARACTER. client_key in use: '${clientKey}'. `
+            + `PKCE: ${entry.codeVerifier ? 'code_verifier was sent' : 'code_verifier was NOT sent'}. `
+            + `${token.data?.log_id ? `log_id=${token.data.log_id} (give this to TikTok support). ` : ''}`
+            + 'If you just re-copied the client key/secret, save them in Settings and try again.',
         },
       );
     }
@@ -441,8 +441,8 @@ export class OAuthManager {
     const granted = String(token.data.scope ?? '').split(',').map((s) => s.trim());
     if (!granted.includes('video.publish') && !granted.includes('video.upload')) {
       throw new AuthError(
-        `Nguoi dung chua cap quyen dang bai (scope duoc cap: ${granted.join(', ') || 'khong co'})`,
-        { hint: 'Can video.publish (dang truc tiep) hoac video.upload (dang draft).' },
+        `Publishing permission was not granted (scopes granted: ${granted.join(', ') || 'none'})`,
+        { hint: 'This needs video.publish (direct posting) or video.upload (drafts).' },
       );
     }
 
@@ -490,15 +490,15 @@ export async function connectTelegram(opts) {
   const botToken = String(opts.botToken ?? '').trim();
   const chatId = String(opts.chatId ?? '').trim();
   if (!botToken || !chatId) {
-    throw new ConfigError('Can nhap ca bot token va chat id');
+    throw new ConfigError('Both the bot token and the chat id are required');
   }
   const base = `https://api.telegram.org/bot${botToken}`;
 
   const me = await http.request(`${base}/getMe`, { method: 'GET', throwOnError: false });
   if (!me.ok || me.data?.ok !== true) {
-    throw new AuthError(`Bot token khong hop le: ${me.data?.description ?? me.status}`, {
+    throw new AuthError(`Invalid bot token: ${me.data?.description ?? me.status}`, {
       platform: 'telegram',
-      hint: 'Lay token tu @BotFather.',
+      hint: 'Get the token from @BotFather.',
     });
   }
 
@@ -508,10 +508,10 @@ export async function connectTelegram(opts) {
     throwOnError: false,
   });
   if (!chat.ok || chat.data?.ok !== true) {
-    throw new AuthError(`Khong tim thay chat: ${chat.data?.description ?? chat.status}`, {
+    throw new AuthError(`Chat not found: ${chat.data?.description ?? chat.status}`, {
       platform: 'telegram',
-      hint: 'Channel public dung @tenchannel; channel private dung id dang -100xxxxxxxxxx. '
-        + 'Bot phai da duoc them vao channel.',
+      hint: 'Use @yourchannel for a public channel, or an id like -100xxxxxxxxxx for a private one. '
+        + 'The bot must already have been added to the channel.',
     });
   }
 
@@ -526,12 +526,12 @@ export async function connectTelegram(opts) {
     || (status === 'administrator' && (!isChannel || member.data?.result?.can_post_messages === true));
   if (!canPost) {
     throw new AuthError(
-      `Bot chua co quyen dang bai (trang thai: ${status ?? 'khong ro'})`,
+      `The bot cannot post yet (status: ${status ?? 'unknown'})`,
       {
         platform: 'telegram',
         hint: isChannel
-          ? 'Them bot lam ADMIN cua channel va bat quyen "Post Messages".'
-          : 'Cap quyen gui tin nhan cho bot trong group.',
+          ? 'Add the bot as an ADMIN of the channel and enable the "Post Messages" permission.'
+          : 'Give the bot permission to send messages in the group.',
       },
     );
   }

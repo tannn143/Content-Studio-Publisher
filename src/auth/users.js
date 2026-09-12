@@ -133,16 +133,16 @@ export class UserService {
     const username = normalizeUsername(draft.username);
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
       throw new ValidationError(
-        'Username phai dai 3-32 ky tu, chi gom chu khong dau, so, dau . _ -',
+        'Username must be 3-32 characters: lowercase letters, digits, and . _ - only',
       );
     }
     if (await this.findByUsername(username)) {
-      throw new ValidationError(`Username '${username}' da ton tai`);
+      throw new ValidationError(`Username '${username}' is already taken`);
     }
     const role = ROLES.includes(draft.role) ? draft.role : 'member';
     const password = String(draft.password ?? '');
     if (password.length < 10) {
-      throw new ValidationError('Mat khau phai it nhat 10 ky tu');
+      throw new ValidationError('Password must be at least 10 characters');
     }
     const { salt, hash } = hashPassword(password);
 
@@ -182,7 +182,7 @@ export class UserService {
    */
   async updateUser(id, patch) {
     const user = await this.users.get(id);
-    if (!user) throw new ValidationError(`Khong tim thay nguoi dung '${id}'`);
+    if (!user) throw new ValidationError(`User '${id}' not found`);
 
     /** @type {Record<string, any>} */
     const next = {};
@@ -222,8 +222,8 @@ export class UserService {
     );
     if (admins.length === 0) {
       throw new ValidationError(
-        'Day la admin duy nhat dang hoat dong - khong the ha quyen hoac tat tai khoan nay',
-        { hint: 'Tao hoac bat mot admin khac truoc.' },
+        'This is the only active administrator - you cannot change their role or disable them',
+        { hint: 'Create or enable another administrator first.' },
       );
     }
   }
@@ -236,7 +236,7 @@ export class UserService {
    */
   async setPassword(id, password, opts = {}) {
     if (String(password).length < 10) {
-      throw new ValidationError('Mat khau phai it nhat 10 ky tu');
+      throw new ValidationError('Password must be at least 10 characters');
     }
     const { salt, hash } = hashPassword(String(password));
     const updated = await this.users.update(id, {
@@ -376,7 +376,7 @@ export class UserService {
       // Giu log khong phinh vo han.
       await this.audit.trim(5000);
     } catch (err) {
-      this.logger?.warn('khong ghi duoc audit log', { error: /** @type {any} */ (err)?.message });
+      this.logger?.warn('could not write to the audit log', { error: /** @type {any} */ (err)?.message });
     }
   }
 
@@ -437,12 +437,12 @@ export function assertCanPublishPost(user, channelIds) {
     return {
       ok: false,
       denied: [...channelIds],
-      reason: 'Tai khoan nay chi duoc soan bai, khong duoc dang. Nho admin cap quyen dang.',
+      reason: 'This account may only draft posts, not publish them. Ask an administrator for publishing rights.',
     };
   }
   const denied = channelIds.filter((id) => !canUseChannel(user, id));
   if (denied.length > 0) {
-    return { ok: false, denied, reason: 'Tai khoan nay khong duoc cap quyen len mot so kenh da chon.' };
+    return { ok: false, denied, reason: 'This account has not been granted access to some of the selected accounts.' };
   }
   return { ok: true };
 }

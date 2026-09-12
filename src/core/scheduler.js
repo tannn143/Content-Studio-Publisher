@@ -33,7 +33,7 @@ export class PostScheduler {
 
   start() {
     if (this.timer) return this;
-    this.logger.info('scheduler bat dau', { intervalMs: this.intervalMs });
+    this.logger.info('scheduler started', { intervalMs: this.intervalMs });
     // Chay ngay mot lan roi lap.
     void this.tick();
     this.timer = setInterval(() => void this.tick(), this.intervalMs);
@@ -45,7 +45,7 @@ export class PostScheduler {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      this.logger.info('scheduler da dung');
+      this.logger.info('scheduler stopped');
     }
     return this;
   }
@@ -85,7 +85,7 @@ export class PostScheduler {
               scheduledAt: next,
               note: `Thu lai lan ${attempts} sau ${delayMin} phut: ${err.message}`,
             });
-            this.logger.warn('bai dang loi tam thoi - da lui lich', {
+            this.logger.warn('temporary failure - the post was rescheduled', {
               postId: post.id,
               next,
               error: err.message,
@@ -93,7 +93,7 @@ export class PostScheduler {
             this.events.emit('post:retry', { postId: post.id, nextAt: next, message: err.message });
           } else {
             await this.workspace.updatePost(post.id, { status: 'failed', note: err.message });
-            this.logger.error('bai dang that bai', { postId: post.id, error: err.message });
+            this.logger.error('post failed', { postId: post.id, error: err.message });
           }
         }
       }

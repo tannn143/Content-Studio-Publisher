@@ -210,7 +210,7 @@ test('regression: khong cho dang lai bai da dang thanh cong', async () => {
       body: '{}',
     }));
     assert.equal(res.status, 409);
-    assert.match((await res.json()).error, /da dang thanh cong/);
+    assert.match((await res.json()).error, /already published/);
   } finally {
     await handle.close();
     await rm(dir, { recursive: true, force: true });
@@ -232,7 +232,7 @@ test('regression: bai bi ket o "publishing" duoc khoi phuc khi khoi dong lai', a
     await h2.start();
     const after = await h2.workspace.posts.get(post.id);
     assert.equal(after.status, 'failed');
-    assert.match(after.note, /ngat giua luc dang/);
+    assert.match(after.note, /Interrupted while publishing/);
     await h2.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -332,7 +332,7 @@ test('regression: readRange tren URL phai bat loi khi server bo qua Range', asyn
   // Server tra 200 (bo qua Range) thay vi 206 -> phai bao loi, khong duoc dung byte sai.
   globalThis.fetch = async () => new Response(Buffer.alloc(1000), { status: 200 });
   try {
-    await assert.rejects(() => media.readRange(0, 99), /khong ho tro HTTP Range/);
+    await assert.rejects(() => media.readRange(0, 99), /does not support HTTP Range/);
   } finally {
     globalThis.fetch = original;
   }
@@ -564,7 +564,7 @@ test('regression: poster khong dang khi signal da bi huy tu truoc', async () => 
   });
   const report = await poster.post({ title: 'x', description: 'y' }, { signal: controller.signal });
   assert.equal(report.skipped.includes('telegram'), true);
-  assert.equal(report.byChannel.telegram.reason, 'da huy');
+  assert.equal(report.byChannel.telegram.reason, 'aborted');
 });
 
 test('regression: upload ten file tieng Viet khong bi mangle', async () => {

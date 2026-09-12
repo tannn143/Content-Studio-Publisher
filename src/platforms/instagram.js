@@ -95,8 +95,8 @@ export class InstagramPlatform extends BasePlatform {
 
   validateConfig() {
     this.requireConfig(['igUserId', 'accessToken'], {
-      hint: 'igUserId lay tu GET /{page-id}?fields=instagram_business_account. '
-        + 'accessToken nen la PAGE access token (Facebook Login) hoac Instagram User token (Instagram Login).',
+      hint: 'Get igUserId from GET /{page-id}?fields=instagram_business_account. '
+        + 'accessToken should be a PAGE access token (Facebook Login) or an Instagram User token (Instagram Login).',
     });
     return true;
   }
@@ -166,8 +166,8 @@ export class InstagramPlatform extends BasePlatform {
   async doPublish(post, options) {
     if (post.media.length === 0) {
       throw new UnsupportedError(
-        'Instagram khong dang duoc bai chi co chu. Can it nhat 1 anh hoac video.',
-        { platform: this.id, hint: 'Muon dang text: dung Threads API (san pham khac).' },
+        'Instagram cannot post text only. At least one image or video is required.',
+        { platform: this.id, hint: 'For text posts, use the Threads API instead - it is a separate product.' },
       );
     }
 
@@ -175,7 +175,7 @@ export class InstagramPlatform extends BasePlatform {
       const quota = await this.getPublishingLimit().catch(() => undefined);
       if (quota && quota.used >= quota.total) {
         throw new RateLimitError(
-          `Instagram da dat gioi han ${quota.total} bai/24h (da dang ${quota.used})`,
+          `Instagram's limit of ${quota.total} posts/24h has been reached (${quota.used} posted)`,
           { platform: this.id, retryable: false, details: quota },
         );
       }
@@ -261,11 +261,11 @@ export class InstagramPlatform extends BasePlatform {
 
   async _publishStory(post, options) {
     const media = post.media[0];
-    if (!media) throw new ValidationError('Story can 1 media', { platform: this.id });
+    if (!media) throw new ValidationError('A Story needs one media item', { platform: this.id });
     if (post.media.length > 1) {
-      this.logger.warn('Instagram Stories chi dang duoc 1 media moi lan - cac media sau bi bo qua', {
+      this.logger.warn('Instagram Stories take one media item at a time - the rest were skipped', {
         skipped: post.media.length - 1,
-        hint: 'Muon dang nhieu story: goi post() nhieu lan, moi lan 1 media.',
+        hint: 'To post several stories, call post() once per media item.',
       });
     }
 
@@ -277,13 +277,13 @@ export class InstagramPlatform extends BasePlatform {
       if (options.probeMedia !== false && !media.durationSec) await media.probeWithFfprobe();
       if (media.size && media.size > LIMITS.storyBytes) {
         throw new UnsupportedError(
-          `[instagram] video story toi da 100MB (file: ${Math.round(media.size / 1e6)}MB)`,
+          `[instagram] a story video may be at most 100MB (this file: ${Math.round(media.size / 1e6)}MB)`,
           { platform: this.id },
         );
       }
       if (media.durationSec && media.durationSec > LIMITS.storyMaxSec) {
         throw new UnsupportedError(
-          `[instagram] video story toi da 60s (video: ${Math.round(media.durationSec)}s)`,
+          `[instagram] a story video may be at most 60s (this video: ${Math.round(media.durationSec)}s)`,
           { platform: this.id },
         );
       }
@@ -305,7 +305,7 @@ export class InstagramPlatform extends BasePlatform {
     await this._waitContainerReady(containerId, options);
     // Story khong co caption -> bao cho nguoi dung biet neu ho co nhap.
     if (post.title || post.description || post.hashtags.length > 0) {
-      this.logger.warn('Instagram Stories khong co caption qua API - title/description/hashtag bi bo qua');
+      this.logger.warn('Instagram Stories take no caption through the API - title, description and hashtags were dropped');
     }
     return this._publishContainer(containerId, { kind: 'story' });
   }
@@ -315,12 +315,12 @@ export class InstagramPlatform extends BasePlatform {
   async _publishCarousel(post, options, caption) {
     const items = post.media.slice(0, LIMITS.carouselMax);
     if (post.media.length > LIMITS.carouselMax) {
-      this.logger.warn('carousel toi da 10 media - cac media sau bi bo qua', {
+      this.logger.warn('a carousel takes at most 10 media items - the rest were skipped', {
         skipped: post.media.length - LIMITS.carouselMax,
       });
     }
     if (items.length < LIMITS.carouselMin) {
-      throw new ValidationError('Carousel can 2-10 media', { platform: this.id });
+      throw new ValidationError('A carousel needs between 2 and 10 media items', { platform: this.id });
     }
 
     /** @type {string[]} */
@@ -385,7 +385,7 @@ export class InstagramPlatform extends BasePlatform {
     const body = clean(params);
     const data = await this._post(`/${this.config.igUserId}/media`, body, token);
     if (!data?.id) {
-      throw new PlatformError('Instagram khong tra ve container id', { platform: this.id, details: data });
+      throw new PlatformError('Instagram returned no container id', { platform: this.id, details: data });
     }
     this.logger.debug('da tao container', { id: data.id, mediaType: params.media_type ?? 'IMAGE' });
     return opts.withUri ? { id: String(data.id), uri: data.uri } : String(data.id);
@@ -401,7 +401,7 @@ export class InstagramPlatform extends BasePlatform {
   async _ruploadVideo(uploadUri, media, options) {
     const token = await this.token();
     const total = media.size ?? 0;
-    if (!total) throw new UnsupportedError('Khong xac dinh duoc dung luong video', { platform: this.id });
+    if (!total) throw new UnsupportedError('Could not determine the video size', { platform: this.id });
 
     const containerId = uploadUri.split('/').pop();
     const maxAttempts = options.uploadRetries ?? this.config.uploadRetries ?? 3;
@@ -427,7 +427,7 @@ export class InstagramPlatform extends BasePlatform {
       });
 
       if (res.ok && res.data?.success !== false) {
-        this.logger.info('da upload video len Instagram', { bytes: total, offset, attempt });
+        this.logger.info('video uploaded to Instagram', { bytes: total, offset, attempt });
         return res.data;
       }
 
@@ -436,7 +436,7 @@ export class InstagramPlatform extends BasePlatform {
         'rupload',
       );
       if (attempt === maxAttempts) {
-        throw err ?? new PlatformError(`Upload video len Instagram that bai (HTTP ${res.status})`, {
+        throw err ?? new PlatformError(`Uploading the video to Instagram failed (HTTP ${res.status})`, {
           platform: this.id,
           details: res.data,
         });
@@ -445,14 +445,14 @@ export class InstagramPlatform extends BasePlatform {
       // Doc offset ma server da nhan de tiep tuc (khong upload lai tu dau).
       const transferred = await this._readUploadedBytes(containerId).catch(() => undefined);
       if (transferred != null && transferred > offset && transferred < total) {
-        this.logger.warn('upload bi ngat, tiep tuc tu offset server bao', { offset: transferred, total });
+        this.logger.warn('upload interrupted, resuming from the offset the server reported', { offset: transferred, total });
         offset = transferred;
       } else {
-        this.logger.warn('upload that bai, thu lai tu dau', { attempt, error: err?.message });
+        this.logger.warn('upload failed, retrying from the start', { attempt, error: err?.message });
         offset = 0;
       }
     }
-    throw new PlatformError('Upload video len Instagram that bai', { platform: this.id });
+    throw new PlatformError('Uploading the video to Instagram failed', { platform: this.id });
   }
 
   /** So byte server da nhan (video_status.uploading_phase.bytes_transferred). */
@@ -486,13 +486,13 @@ export class InstagramPlatform extends BasePlatform {
           return { done: false, failed: true, reason: `status=${data?.status ?? 'unknown'}` };
         }
         if (code === 'EXPIRED') {
-          return { done: false, failed: true, reason: 'container het han (>24h)' };
+          return { done: false, failed: true, reason: 'the container expired (over 24h)' };
         }
         if (code === 'PUBLISHED') return { done: true, value: data };
 
         const copyright = data?.copyright_check_status;
         if (copyright?.matches_found === true) {
-          this.logger.warn('Instagram phat hien noi dung co the vi pham ban quyen', { copyright });
+          this.logger.warn('Instagram flagged possible copyrighted content', { copyright });
         }
         return { done: false, value: data };
       },
@@ -503,7 +503,7 @@ export class InstagramPlatform extends BasePlatform {
       // Mot so subcode la loi TAM THOI (loi server IG, tai media that bai) -> danh dau
       // retryable de scheduler lui lich thu lai thay vi bo han bai dang.
       const subcode = Number(/(\d{7})/.exec(String(result.reason ?? ''))?.[1]);
-      throw new ProcessingError(`Instagram xu ly media that bai: ${result.reason}`, {
+      throw new ProcessingError(`Instagram failed to process the media: ${result.reason}`, {
         platform: this.id,
         details: { containerId, reason: result.reason, subcode },
         retryable: RETRYABLE_SUBCODES.has(subcode),
@@ -512,12 +512,12 @@ export class InstagramPlatform extends BasePlatform {
     }
     if (result.timedOut) {
       throw new ProcessingError(
-        `Het thoi gian cho Instagram xu ly media (container ${containerId})`,
+        `Timed out waiting for Instagram to process the media (container ${containerId})`,
         {
           platform: this.id,
           details: { containerId, elapsedMs: result.elapsedMs },
           retryable: false,
-          hint: 'Container con hieu luc 24h. Co the kiem tra lai va goi media_publish sau, tranh tao container moi de khong dang trung.',
+          hint: 'The container stays valid for 24h. Check again and call media_publish later rather than creating a new container, to avoid double posting.',
         },
       );
     }
@@ -542,7 +542,7 @@ export class InstagramPlatform extends BasePlatform {
     );
     const mediaId = data?.id;
     if (!mediaId) {
-      throw new PlatformError('Instagram khong tra ve media id sau khi publish', {
+      throw new PlatformError('Instagram returned no media id after publishing', {
         platform: this.id,
         details: data,
       });
@@ -576,7 +576,7 @@ export class InstagramPlatform extends BasePlatform {
     const caption = this.buildCaption(post, options);
     const mentions = (caption.text.match(/@[A-Za-z0-9._]+/g) ?? []).length;
     if (mentions > LIMITS.mentions) {
-      this.logger.warn('caption co qua nhieu @mention', { mentions, max: LIMITS.mentions });
+      this.logger.warn('the caption has too many @mentions', { mentions, max: LIMITS.mentions });
     }
     return caption;
   }
@@ -586,22 +586,22 @@ export class InstagramPlatform extends BasePlatform {
     // Kiem tra mime TRUOC assertMediaLimits de thong bao co huong dan cu the hon.
     if (media.mime !== 'image/jpeg') {
       throw new UnsupportedError(
-        `[instagram] chi nhan anh JPEG (nhan ${media.mime}). Hay chuyen PNG/WebP sang JPEG truoc khi dang.`,
+        `[instagram] only JPEG images are accepted (got ${media.mime}). Convert PNG/WebP to JPEG first.`,
         { platform: this.id, details: { mime: media.mime } },
       );
     }
     this.assertMediaLimits(media);
     if (media.size && media.size > LIMITS.imageBytes) {
       throw new UnsupportedError(
-        `[instagram] anh toi da 8MB (file: ${Math.round(media.size / 1e6)}MB)`,
+        `[instagram] an image may be at most 8MB (this file: ${Math.round(media.size / 1e6)}MB)`,
         { platform: this.id, details: { size: media.size } },
       );
     }
     // Ty le khung hinh chi kiem tra duoc khi biet width/height.
     if (!media.width || !media.height) {
-      this.logger.warn('khong biet kich thuoc anh - bo qua kiem tra ty le 4:5-1.91:1 cua Instagram', {
+      this.logger.warn('image dimensions unknown - skipping the Instagram 4:5-1.91:1 aspect ratio check', {
         filename: media.filename,
-        hint: 'Instagram se tu choi (subcode 2207009) neu anh ngoai khoang. Cai ffprobe hoac truyen width/height.',
+        hint: 'Instagram rejects out-of-range images (subcode 2207009). Install ffprobe, or pass width/height.',
       });
     }
     if (media.width && media.height) {
@@ -612,13 +612,13 @@ export class InstagramPlatform extends BasePlatform {
           {
             platform: this.id,
             details: { width: media.width, height: media.height, ratio },
-            hint: 'Anh doc 9:16 chi dang duoc len Reels/Stories. Voi feed hay crop ve 1080x1350 (4:5) hoac 1080x1080.',
+            hint: 'A 9:16 vertical image can only go to Reels/Stories. For the feed, crop to 1080x1350 (4:5) or 1080x1080.',
           },
         );
       }
       if (media.width < LIMITS.imageMinWidth) {
         throw new UnsupportedError(
-          `[instagram] anh phai rong toi thieu ${LIMITS.imageMinWidth}px (anh nay ${media.width}px)`,
+          `[instagram] an image must be at least ${LIMITS.imageMinWidth}px wide (this one is ${media.width}px)`,
           { platform: this.id },
         );
       }
@@ -627,7 +627,7 @@ export class InstagramPlatform extends BasePlatform {
       const r1 = ctx.first.width / ctx.first.height;
       const r2 = media.width / media.height;
       if (Math.abs(r1 - r2) > 0.02) {
-        this.logger.warn('cac media trong carousel khac ty le - Instagram se crop theo media dau tien', {
+        this.logger.warn('the carousel media have different aspect ratios - Instagram crops them all to match the first', {
           firstRatio: Number(r1.toFixed(3)),
           thisRatio: Number(r2.toFixed(3)),
         });
@@ -652,13 +652,13 @@ export class InstagramPlatform extends BasePlatform {
   _warnReelSpec(media) {
     const issues = [];
     if (media.size && media.size > LIMITS.reelBytes) {
-      issues.push(`dung luong ${Math.round(media.size / 1e6)}MB (toi da 300MB)`);
+      issues.push(`size ${Math.round(media.size / 1e6)}MB (300MB maximum)`);
     }
     if (media.durationSec != null) {
       if (media.durationSec < LIMITS.reelMinSec) issues.push(`${Math.round(media.durationSec)}s (toi thieu 3s)`);
       if (media.durationSec > LIMITS.reelMaxSec) issues.push(`${Math.round(media.durationSec)}s (toi da 15 phut)`);
     }
-    if (media.width && media.width > 1920) issues.push(`rong ${media.width}px (toi da 1920)`);
+    if (media.width && media.width > 1920) issues.push(`width ${media.width}px (1920 maximum)`);
     if (issues.length > 0) {
       this.logger.warn('video co the bi Instagram tu choi', {
         issues,
@@ -731,13 +731,13 @@ export class InstagramPlatform extends BasePlatform {
       retry: { retries: 2 },
     });
     if (!res.ok || !res.data?.access_token) {
-      throw new AuthError('Khong gia han duoc Instagram access token', {
+      throw new AuthError('Could not renew the Instagram access token', {
         platform: this.id,
         httpStatus: res.status,
         details: res.data,
         retryable: false,
-        hint: 'Token dai han cua Instagram Login song 60 ngay va phai duoc refresh (token can >= 24h tuoi). '
-          + 'Neu da het han thi phai dang nhap xin quyen lai.',
+        hint: 'An Instagram Login long-lived token lives 60 days and must be refreshed (the token must be at least 24h old). '
+          + 'Once expired, the user has to sign in and authorize again.',
       });
     }
     return {
@@ -821,22 +821,22 @@ export function describeIgSubcode(reason) {
 }
 
 const IG_SUBCODE_HINTS = {
-  2207003: 'Meta tai media tu URL qua lau. Dung CDN nhanh hon hoac file nho hon.',
+  2207003: 'Meta took too long to fetch the media from the URL. Use a faster CDN or a smaller file.',
   2207004: 'Anh vuot 8MB.',
-  2207005: 'Dinh dang anh khong duoc ho tro - phai la JPEG baseline.',
+  2207005: 'Unsupported image format - it must be baseline JPEG.',
   2207009: 'Ty le anh ngoai khoang 4:5 - 1.91:1.',
   2207010: 'Caption vuot 2200 ky tu.',
-  2207020: 'Container da het han (>24h) - phai tao container moi.',
-  2207023: 'media_type khong hop le.',
-  2207026: 'Dinh dang video khong ho tro - transcode ve MP4/MOV H264+AAC, faststart.',
-  2207027: 'Media chua xu ly xong - phai cho status_code=FINISHED truoc khi publish.',
+  2207020: 'The container has expired (over 24h) - create a new one.',
+  2207023: 'Invalid media_type.',
+  2207026: 'Unsupported video format - transcode to MP4/MOV with H264+AAC and faststart.',
+  2207027: 'The media is still processing - wait for status_code=FINISHED before publishing.',
   2207028: 'Carousel can 2-10 media.',
   2207040: 'Qua nhieu user_tags (toi da 20).',
-  2207042: 'Da het quota dang bai trong 24h.',
-  2207050: 'Tai khoan Instagram dang bi han che - kiem tra trong app.',
+  2207042: 'The 24h posting quota is used up.',
+  2207050: 'This Instagram account is restricted - check inside the app.',
   2207051: 'Bi coi la spam - giam tan suat dang.',
-  2207052: 'Meta khong tai duoc media tu URL: URL phai cong khai, HTTPS, khong can dang nhap, khong redirect nhieu lan.',
-  2207053: 'Loi upload khong xac dinh - tao container moi va upload lai.',
+  2207052: 'Meta could not fetch the media from the URL: it must be public, HTTPS, need no sign-in, and not redirect repeatedly.',
+  2207053: 'Unknown upload error - create a new container and upload again.',
   2207057: 'thumb_offset phai >= 0 va nho hon do dai video.',
 };
 
@@ -867,7 +867,7 @@ export function mapInstagramError(ctx, op = '') {
   };
 
   if (code === 190) {
-    return new AuthError(`[instagram] token khong hop le (190/${subcode}): ${message}`, {
+    return new AuthError(`[instagram] invalid token (190/${subcode}): ${message}`, {
       ...base,
       retryable: false,
       hint: 'Token het han/bi thu hoi. Facebook Login: tao lai Page token. Instagram Login: refresh token (60 ngay).',
@@ -884,11 +884,11 @@ export function mapInstagramError(ctx, op = '') {
     return new PlatformError(`[instagram] bi han che vi nghi la spam: ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Giam tan suat dang bai. Dung retry lien tuc.',
+      hint: 'Post less often. Do not retry in a tight loop.',
     });
   }
   if (code === 4 || code === 17 || code === 32 || code === 80002 || status === 429) {
-    return new RateLimitError(`[instagram] vuot gioi han tan suat (${code}): ${message}`, {
+    return new RateLimitError(`[instagram] rate limit exceeded (${code}): ${message}`, {
       ...base,
       retryable: true,
     });
@@ -897,11 +897,11 @@ export function mapInstagramError(ctx, op = '') {
     return new AuthError(`[instagram] tai khoan bi han che: ${message}`, { ...base, retryable: false });
   }
   if (code === 200 || code === 10 || status === 403) {
-    return new AuthError(`[instagram] thieu quyen (${code}): ${message}`, {
+    return new AuthError(`[instagram] missing permission (${code}): ${message}`, {
       ...base,
       retryable: false,
       hint: 'Can instagram_content_publish (Facebook Login) hoac instagram_business_content_publish (Instagram Login), '
-        + 'va tai khoan phai la Business/Creator.',
+        + 'and the account must be Business/Creator.',
     });
   }
   if (RETRYABLE_SUBCODES.has(subcode) || transient) {

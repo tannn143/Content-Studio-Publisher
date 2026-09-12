@@ -105,13 +105,13 @@ export class S3MediaHost {
       const { url, headers } = this._sign('DELETE', key, { payloadHash: EMPTY_SHA256 });
       const res = await this.fetchImpl(url, { method: 'DELETE', headers });
       if (!res.ok && res.status !== 404) {
-        this.logger?.warn('khong xoa duoc object tam tren S3', { key, status: res.status });
+        this.logger?.warn('could not delete the temporary object on S3', { key, status: res.status });
       } else {
-        this.logger?.debug('da xoa object tam tren S3', { key });
+        this.logger?.debug('temporary object deleted from S3', { key });
       }
       await res.arrayBuffer().catch(() => {});
     } catch (err) {
-      this.logger?.warn('loi khi xoa object tam tren S3', { key, error: String(err) });
+      this.logger?.warn('error deleting the temporary object on S3', { key, error: String(err) });
     }
   }
 

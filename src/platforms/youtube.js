@@ -85,8 +85,8 @@ export class YouTubePlatform extends BasePlatform {
 
   validateConfig() {
     this.requireConfig(['clientId', 'clientSecret', 'refreshToken'], {
-      hint: 'Tao OAuth Client (Desktop/Web) trong Google Cloud, bat YouTube Data API v3, '
-        + 'roi ket noi o tab "Kenh" cua web admin (`npm run serve`). LUU Y: app o che do Testing thi refresh token het han sau 7 ngay.',
+      hint: 'Create an OAuth Client (Desktop/Web) in Google Cloud, enable YouTube Data API v3, '
+        + 'then connect on the Channels tab of the web admin (`npm run serve`). NOTE: in Testing mode, refresh tokens expire after 7 days.',
     });
     return true;
   }
@@ -99,9 +99,9 @@ export class YouTubePlatform extends BasePlatform {
       if (!ch) {
         return {
           ok: false,
-          error: new AuthError('Tai khoan Google nay chua co channel YouTube', {
+          error: new AuthError('This Google account has no YouTube channel yet', {
             platform: this.id,
-            hint: 'Tao channel tai youtube.com truoc khi upload.',
+            hint: 'Create a channel at youtube.com before uploading.',
           }),
         };
       }
@@ -123,7 +123,7 @@ export class YouTubePlatform extends BasePlatform {
     const media = post.videos[0];
     if (!media) {
       throw new UnsupportedError(
-        'YouTube Data API chi dang duoc VIDEO. Muon dang anh: encode anh thanh video doc ngan (Shorts) roi dang.',
+        'The YouTube Data API can only post VIDEO. To post an image, encode it as a short vertical video (a Short) first.',
         { platform: this.id },
       );
     }
@@ -132,8 +132,8 @@ export class YouTubePlatform extends BasePlatform {
     // khong de den luc upload chunk moi phat hien khong biet dung luong.
     if (!media.size) {
       throw new UnsupportedError(
-        'Khong xac dinh duoc dung luong video - YouTube yeu cau X-Upload-Content-Length chinh xac.',
-        { platform: this.id, hint: 'Dung file local hoac URL co tra ve Content-Length.' },
+        'Could not determine the video size - YouTube requires an exact X-Upload-Content-Length.',
+        { platform: this.id, hint: 'Use a local file, or a URL that returns Content-Length.' },
       );
     }
 
@@ -154,7 +154,7 @@ export class YouTubePlatform extends BasePlatform {
 
     const videoId = video?.id;
     if (!videoId) {
-      throw new PlatformError('YouTube khong tra ve video id sau khi upload', {
+      throw new PlatformError('YouTube returned no video id after the upload', {
         platform: this.id,
         details: video,
       });
@@ -176,16 +176,16 @@ export class YouTubePlatform extends BasePlatform {
     const thumb = options.thumbnail ?? media.thumbnailPath;
     const processingOk = !processing || processing.processingStatus === 'succeeded';
     if (thumb && !processingOk) {
-      this.logger.warn('bo qua thumbnail: YouTube chua xu ly xong video', {
+      this.logger.warn('thumbnail skipped: YouTube has not finished processing the video', {
         videoId,
         processing: processing?.processingStatus ?? 'timeout',
-        hint: 'Dat thumbnail sau bang youtube.setThumbnail(videoId, file).',
+        hint: 'Set the thumbnail later with youtube.setThumbnail(videoId, file).',
       });
       meta.thumbnail = { ok: false, skipped: 'video chua xu ly xong' };
     } else if (thumb) {
       meta.thumbnail = await this._setThumbnail(videoId, thumb).catch((err) => {
         // Thumbnail loi khong nen lam that bai ca bai dang.
-        this.logger.warn('dat thumbnail that bai', { error: /** @type {Error} */ (err).message });
+        this.logger.warn('could not set the thumbnail', { error: /** @type {Error} */ (err).message });
         return { ok: false, error: /** @type {Error} */ (err).message };
       });
     }
@@ -193,7 +193,7 @@ export class YouTubePlatform extends BasePlatform {
     const playlistId = options.playlistId ?? this.config.playlistId;
     if (playlistId) {
       meta.playlist = await this._addToPlaylist(videoId, playlistId).catch((err) => {
-        this.logger.warn('them vao playlist that bai', { error: /** @type {Error} */ (err).message });
+        this.logger.warn('could not add to the playlist', { error: /** @type {Error} */ (err).message });
         return { ok: false, error: /** @type {Error} */ (err).message };
       });
     }
@@ -219,7 +219,7 @@ export class YouTubePlatform extends BasePlatform {
   _buildSnippet(post, options) {
     const title = buildTitle(post, options);
     if (!title) {
-      throw new ValidationError('YouTube bat buoc co title khong rong', {
+      throw new ValidationError('YouTube requires a non-empty title', {
         platform: this.id,
         issues: [{ path: 'title', message: 'required' }],
       });
@@ -247,7 +247,7 @@ export class YouTubePlatform extends BasePlatform {
   _buildStatus(post, options) {
     let privacyStatus = String(options.privacyStatus ?? this.config.privacyStatus ?? 'private').toLowerCase();
     if (!['private', 'public', 'unlisted'].includes(privacyStatus)) {
-      throw new ValidationError(`privacyStatus phai la private|public|unlisted (nhan '${privacyStatus}')`, {
+      throw new ValidationError(`privacyStatus must be private|public|unlisted (got '${privacyStatus}')`, {
         platform: this.id,
       });
     }
@@ -262,11 +262,11 @@ export class YouTubePlatform extends BasePlatform {
     if (post.scheduleAt) {
       // publishAt chi co hieu luc khi privacyStatus = 'private'.
       if (privacyStatus !== 'private') {
-        this.logger.warn('publishAt chi hoat dong voi privacyStatus=private -> tu dong doi sang private');
+        this.logger.warn('publishAt only works with privacyStatus=private, so it was switched to private');
         status.privacyStatus = 'private';
       }
       if (post.scheduleAt.getTime() <= Date.now()) {
-        throw new ValidationError('scheduleAt phai o tuong lai (YouTube tra 400 invalidPublishAt)', {
+        throw new ValidationError('scheduleAt must be in the future (YouTube returns 400 invalidPublishAt)', {
           platform: this.id,
         });
       }
@@ -290,9 +290,9 @@ export class YouTubePlatform extends BasePlatform {
     if (media.width && media.height && media.width > media.height) reasons.push('video ngang (can doc hoac vuong)');
     if (media.durationSec && media.durationSec > 180) reasons.push(`dai ${Math.round(media.durationSec)}s (toi da 180s)`);
     if (reasons.length > 0) {
-      this.logger.warn('video co the KHONG duoc xem la Shorts', {
+      this.logger.warn('this video may NOT be treated as a Short', {
         reasons,
-        hint: 'Shorts duoc xac dinh boi ty le khung hinh (width <= height) va thoi luong <= 3 phut, khong phai boi #Shorts.',
+        hint: 'Shorts are decided by aspect ratio (width <= height) and a duration of 3 minutes or less, not by the #Shorts tag.',
       });
     }
   }
@@ -337,7 +337,7 @@ export class YouTubePlatform extends BasePlatform {
 
     const location = res.headers.get('location');
     if (!location) {
-      throw new PlatformError('YouTube khong tra ve header Location cho session resumable', {
+      throw new PlatformError('YouTube returned no Location header for the resumable session', {
         platform: this.id,
         details: { status: res.status, body: res.text?.slice(0, 400) },
       });
@@ -355,7 +355,7 @@ export class YouTubePlatform extends BasePlatform {
    */
   async _uploadChunks(sessionUrl, media, options) {
     const total = media.size ?? 0;
-    if (!total) throw new UnsupportedError('Khong xac dinh duoc dung luong video', { platform: this.id });
+    if (!total) throw new UnsupportedError('Could not determine the video size', { platform: this.id });
 
     const chunkSize = normalizeChunkSize(options.chunkSizeBytes ?? this.config.chunkSizeBytes ?? DEFAULT_CHUNK_SIZE);
     const contentType = media.mime ?? 'video/mp4';
@@ -387,8 +387,8 @@ export class YouTubePlatform extends BasePlatform {
         const e = /** @type {any} */ (err);
         if (e.httpStatus === 404) {
           throw new PlatformError(
-            'Session resumable da het han (404). Phai khoi tao lai upload (ton them 1 slot quota/ngay).',
-            { platform: this.id, cause: err, retryable: false, hint: 'Giam thoi gian giua cac chunk, hoac upload lai.' },
+            'The resumable session has expired (404). The upload must be restarted, which costs another daily quota slot.',
+            { platform: this.id, cause: err, retryable: false, hint: 'Shorten the gap between chunks, or upload again.' },
           );
         }
         if (attempt > maxAttempts || e.retryable === false) throw err;
@@ -396,7 +396,7 @@ export class YouTubePlatform extends BasePlatform {
         // Backoff truoc khi thu lai: khong co no, mot loi 503 keo dai se quay
         // vong lap hang nghin lan trong vai giay.
         const delayMs = Math.min(64_000, 1000 * 2 ** (attempt - 1));
-        this.logger.warn('chunk loi, cho roi do lai vi tri tu server', {
+        this.logger.warn('chunk failed, waiting and re-reading the offset from the server', {
           attempt,
           offset,
           delayMs,
@@ -413,7 +413,7 @@ export class YouTubePlatform extends BasePlatform {
 
       if (res.status === 200 || res.status === 201) {
         const video = typeof res.data === 'string' ? tryJson(res.data) : res.data;
-        this.logger.info('upload video xong', { videoId: video?.id, bytes: total });
+        this.logger.info('video upload complete', { videoId: video?.id, bytes: total });
         return video;
       }
 
@@ -427,12 +427,12 @@ export class YouTubePlatform extends BasePlatform {
         attempt += 1;
         if (attempt > maxAttempts) {
           throw new PlatformError(
-            `YouTube khong nhan thêm byte nao sau ${attempt} lan thu (offset ${offset}/${total})`,
+            `YouTube accepted no further bytes after ${attempt} attempts (offset ${offset}/${total})`,
             { platform: this.id, retryable: false, details: { offset, total, range } },
           );
         }
         const delayMs = Math.min(64_000, 1000 * 2 ** (attempt - 1));
-        this.logger.warn('308 khong tien trien - cho roi thu lai', { offset, attempt, delayMs, range });
+        this.logger.warn('308 with no progress - waiting and retrying', { offset, attempt, delayMs, range });
         await sleep(delayMs, this.signal);
       } else {
         attempt = 0;
@@ -444,7 +444,7 @@ export class YouTubePlatform extends BasePlatform {
     // Da day het byte ma chua thay 200/201 -> hoi lai server.
     const probe = await this._probeOffset(sessionUrl, total);
     if (probe.completed) return probe.video;
-    throw new PlatformError('Da gui het byte nhung YouTube chua xac nhan hoan tat', {
+    throw new PlatformError('All bytes were sent but YouTube has not confirmed completion', {
       platform: this.id,
       details: { total, nextOffset: probe.nextOffset },
     });
@@ -526,14 +526,14 @@ export class YouTubePlatform extends BasePlatform {
     );
 
     if (result.failed) {
-      throw new ProcessingError(`YouTube xu ly video that bai: ${result.reason}`, {
+      throw new ProcessingError(`YouTube failed to process the video: ${result.reason}`, {
         platform: this.id,
         details: { videoId, reason: result.reason },
-        hint: 'Xem lai codec/do dai video. Channel chua xac minh chi duoc upload video <= 15 phut.',
+        hint: 'Check the codec and length. An unverified channel may only upload videos of 15 minutes or less.',
       });
     }
     if (result.timedOut) {
-      this.logger.warn('het thoi gian cho xu ly - video van dang duoc YouTube xu ly', { videoId });
+      this.logger.warn('timed out waiting - YouTube is still processing the video', { videoId });
       return { timedOut: true, attempts: result.attempts };
     }
     return { ...result.value, attempts: result.attempts, elapsedMs: result.elapsedMs };
@@ -558,7 +558,7 @@ export class YouTubePlatform extends BasePlatform {
     await media.load();
     if (media.size && media.size > LIMITS.thumbnailBytes) {
       throw new UnsupportedError(
-        `Thumbnail ${Math.round(media.size / 1024)}KB vuot gioi han 2MB cua YouTube`,
+        `The thumbnail is ${Math.round(media.size / 1024)}KB, over YouTube's 2MB limit`,
         { platform: this.id },
       );
     }
@@ -580,7 +580,7 @@ export class YouTubePlatform extends BasePlatform {
       retry: { retries: 2 },
       mapError: (ctx) => mapYouTubeError(ctx, 'thumbnails.set'),
     });
-    this.logger.info('da dat thumbnail', { videoId });
+    this.logger.info('thumbnail set', { videoId });
     return { ok: true, items: res.data?.items };
   }
 
@@ -601,7 +601,7 @@ export class YouTubePlatform extends BasePlatform {
       retry: { retries: 2 },
       mapError: (ctx) => mapYouTubeError(ctx, 'playlistItems.insert'),
     }).then((r) => r.data);
-    this.logger.info('da them vao playlist', { videoId, playlistId });
+    this.logger.info('added to the playlist', { videoId, playlistId });
     return { ok: true, id: data?.id };
   }
 
@@ -646,18 +646,18 @@ export class YouTubePlatform extends BasePlatform {
       const code = data?.error;
       if (code === 'invalid_grant') {
         throw new AuthError(
-          'YouTube refresh_token het han hoac bi thu hoi (invalid_grant). Phai xin lai quyen.',
+          'The YouTube refresh_token has expired or was revoked (invalid_grant). Authorization must be granted again.',
           {
             platform: this.id,
             httpStatus: res.status,
             details: data,
             retryable: false,
-            hint: 'Ket noi lai YouTube o tab "Kenh" cua web admin. Neu OAuth consent screen dang o che do Testing thi token het han sau 7 ngay '
-              + '- hay dua app sang "In production".',
+            hint: 'Connect YouTube again on the Channels tab. If the OAuth consent screen is still in Testing mode, tokens expire after 7 days '
+              + '- move the app to "In production".',
           },
         );
       }
-      throw new AuthError(`Khong lay duoc access token YouTube: ${code ?? res.status} ${data?.error_description ?? ''}`, {
+      throw new AuthError(`Could not obtain a YouTube access token: ${code ?? res.status} ${data?.error_description ?? ''}`, {
         platform: this.id,
         httpStatus: res.status,
         details: data,
@@ -809,70 +809,70 @@ export function mapYouTubeError(ctx, op = '') {
 
   // Het quota ngay -> retry trong ngay la vo nghia.
   if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') {
-    return new QuotaError(`[youtube] het quota (${reason}): ${message}`, {
+    return new QuotaError(`[youtube] quota exhausted (${reason}): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Quota reset 0h Pacific. Mac dinh chi 100 upload/ngay/project. Xin tang quota can qua Compliance Audit.',
+      hint: 'Quota resets at midnight Pacific. The default is 100 uploads/day/project; raising it requires a Compliance Audit.',
     });
   }
   if (reason === 'uploadLimitExceeded') {
-    return new QuotaError(`[youtube] channel da upload qua nhieu hom nay: ${message}`, {
+    return new QuotaError(`[youtube] this channel has uploaded too much today: ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Gioi han so video/ngay cua chinh channel. Doi sang ngay hom sau.',
+      hint: 'This is the per-day video limit of the channel itself. Wait until tomorrow.',
     });
   }
   if (reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded' || reason === 'uploadRateLimitExceeded') {
-    return new RateLimitError(`[youtube] bi throttle (${reason}): ${message}`, {
+    return new RateLimitError(`[youtube] throttled (${reason}): ${message}`, {
       ...base,
       retryable: true,
       retryAfterMs: reason === 'uploadRateLimitExceeded' ? 60_000 : undefined,
     });
   }
   if (reason === 'youtubeSignupRequired') {
-    return new AuthError(`[youtube] tai khoan chua co channel YouTube: ${message}`, {
+    return new AuthError(`[youtube] this account has no YouTube channel: ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Tao channel YouTube cho tai khoan Google nay. Service account khong dung duoc cho upload thong thuong.',
+      hint: 'Create a YouTube channel for this Google account. Service accounts cannot be used for ordinary uploads.',
     });
   }
   if (reason === 'insufficientPermissions') {
-    return new AuthError(`[youtube] thieu scope: ${message}`, {
+    return new AuthError(`[youtube] missing scope: ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Xin lai quyen voi scope https://www.googleapis.com/auth/youtube.upload',
+      hint: 'Authorize again with the https://www.googleapis.com/auth/youtube.upload scope',
     });
   }
   if (reason === 'accessNotConfigured') {
-    return new AuthError(`[youtube] chua bat YouTube Data API v3 tren project: ${message}`, {
+    return new AuthError(`[youtube] YouTube Data API v3 is not enabled on the project: ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Vao Google Cloud Console > APIs & Services > bat "YouTube Data API v3".',
+      hint: 'Go to Google Cloud Console > APIs & Services and enable "YouTube Data API v3".',
     });
   }
   if (status === 401) {
     return new AuthError(`[youtube] 401 (${reason ?? 'unauthorized'}): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Access token sai/het han. Kiem tra refresh_token.',
+      hint: 'The access token is wrong or expired. Check the refresh_token.',
     });
   }
   if (status === 403) {
     const hint = op === 'thumbnails.set'
       ? 'Thumbnail tuy chinh yeu cau channel DA XAC MINH (verified).'
-      : 'Kiem tra quyen cua channel va scope cua token.';
+      : 'Check the channel permissions and the token scopes.';
     return new AuthError(`[youtube] 403 (${reason ?? 'forbidden'}): ${message}`, { ...base, retryable: false, hint });
   }
   if (status === 400) {
     const hints = {
-      invalidTitle: 'Title rong, qua 100 ky tu, hoac chua ky tu < >.',
-      invalidDescription: 'Description qua 5000 BYTE hoac chua ky tu < >.',
-      invalidTags: 'Tong do dai tags qua 500 ky tu (tinh ca dau phay va dau ngoac kep).',
-      invalidCategoryId: 'categoryId khong hop le o khu vuc nay. Tra videoCategories.list?part=snippet&regionCode=XX.',
-      invalidPublishAt: 'publishAt phai o tuong lai VA privacyStatus phai la private.',
-      mediaBodyRequired: 'Thieu du lieu video, hoac goi sai host (phai la .../upload/youtube/v3/videos).',
-      invalidVideoMetadata: 'Body va tham so `part` khong khop.',
-      invalidPart: 'Tham so `part` chua phan khong the ghi cung luc.',
+      invalidTitle: 'The title is empty, longer than 100 characters, or contains < >.',
+      invalidDescription: 'The description is over 5000 BYTES or contains < >.',
+      invalidTags: 'The tags total more than 500 characters (commas and quotes included).',
+      invalidCategoryId: 'This categoryId is not valid in this region. Check videoCategories.list?part=snippet&regionCode=XX.',
+      invalidPublishAt: 'publishAt must be in the future AND privacyStatus must be private.',
+      mediaBodyRequired: 'The video data is missing, or the wrong host was called (it must be .../upload/youtube/v3/videos).',
+      invalidVideoMetadata: 'The body and the `part` parameter do not match.',
+      invalidPart: 'The `part` parameter includes a part that cannot be written at the same time.',
     };
     return new PlatformError(`[youtube] 400 (${reason ?? 'badRequest'}): ${message}`, {
       ...base,

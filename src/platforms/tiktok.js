@@ -110,13 +110,13 @@ export class TikTokPlatform extends BasePlatform {
 
   validateConfig() {
     this.requireConfig(['clientKey', 'clientSecret'], {
-      hint: 'Tao app tren developers.tiktok.com, bat san pham "Content Posting API", '
-        + 'xin scope video.publish (dang truc tiep) va/hoac video.upload (dang nhap).',
+      hint: 'Create an app at developers.tiktok.com, enable the "Content Posting API" product, '
+        + 'and request the video.publish (direct posting) and/or video.upload (drafts) scopes.',
     });
     if (!this.config.refreshToken && !this.config.accessToken) {
       throw new ValidationError(
-        '[tiktok] can `refreshToken` (khuyen nghi) hoac `accessToken`',
-        { platform: this.id, hint: 'Chay `npm run serve` roi ket noi TikTok o tab "Kenh" de lay token.' },
+        '[tiktok] needs `refreshToken` (recommended) or `accessToken`',
+        { platform: this.id, hint: 'Run `npm run serve` and connect TikTok on the Channels tab to obtain a token.' },
       );
     }
     return true;
@@ -156,7 +156,7 @@ export class TikTokPlatform extends BasePlatform {
    */
   async doPublish(post, options) {
     if (post.media.length === 0) {
-      throw new UnsupportedError('TikTok khong co bai chi co chu - can video hoac anh', { platform: this.id });
+      throw new UnsupportedError('TikTok has no text-only posts - a video or images are required', { platform: this.id });
     }
 
     const postMode = String(options.postMode ?? this.config.postMode ?? 'DIRECT_POST').toUpperCase();
@@ -165,7 +165,7 @@ export class TikTokPlatform extends BasePlatform {
     if (post.videos.length > 0) {
       const media = post.videos[0];
       if (post.videos.length > 1) {
-        this.logger.warn('TikTok chi dang 1 video moi bai - cac video sau bi bo qua', {
+        this.logger.warn('TikTok posts one video at a time - the rest were skipped', {
           skipped: post.videos.length - 1,
         });
       }
@@ -204,9 +204,9 @@ export class TikTokPlatform extends BasePlatform {
 
     const publishId = init?.publish_id;
     if (!publishId) {
-      throw new PlatformError('TikTok khong tra ve publish_id', { platform: this.id, details: init });
+      throw new PlatformError('TikTok returned no publish_id', { platform: this.id, details: init });
     }
-    this.logger.info('da khoi tao bai TikTok', { publishId, source: useUrl ? 'PULL_FROM_URL' : 'FILE_UPLOAD' });
+    this.logger.info('TikTok post initialised', { publishId, source: useUrl ? 'PULL_FROM_URL' : 'FILE_UPLOAD' });
 
     // B3: upload chunk (chi voi FILE_UPLOAD)
     if (!useUrl) {
@@ -236,7 +236,7 @@ export class TikTokPlatform extends BasePlatform {
         postId,
         creator: creator.creator_username,
         note: privacyLevel === 'SELF_ONLY'
-          ? 'Bai dang o che do SELF_ONLY (rieng tu). App chua audit chi dang duoc che do nay.'
+          ? 'The post is SELF_ONLY (private). An unaudited app can only post this way.'
           : undefined,
       },
     };
@@ -255,7 +255,7 @@ export class TikTokPlatform extends BasePlatform {
     const init = await this._call('/post/publish/inbox/video/init/', { source_info: sourceInfo }, 'inbox/video/init');
     const publishId = init?.publish_id;
     if (!publishId) {
-      throw new PlatformError('TikTok khong tra ve publish_id (inbox)', { platform: this.id, details: init });
+      throw new PlatformError('TikTok returned no publish_id (inbox)', { platform: this.id, details: init });
     }
 
     if (!useUrl) {
@@ -268,7 +268,7 @@ export class TikTokPlatform extends BasePlatform {
 
     if (post.title || post.description || post.hashtags.length > 0) {
       this.logger.warn(
-        'Che do draft/inbox khong nhan title/caption - nguoi dung phai tu nhap trong app TikTok',
+        'Draft/inbox mode accepts no title or caption - they are typed in the TikTok app',
       );
     }
 
@@ -282,7 +282,7 @@ export class TikTokPlatform extends BasePlatform {
       meta: {
         kind: 'video-draft',
         publishId,
-        note: 'Video da vao inbox TikTok cua creator. Creator phai mo thong bao trong app TikTok de hoan tat dang bai.',
+        note: 'The video is in the creator TikTok inbox. They must open the notification in the TikTok app to finish the post.',
       },
     };
   }
@@ -292,10 +292,10 @@ export class TikTokPlatform extends BasePlatform {
   async _publishPhotos(post, options, { draft }) {
     const images = post.images.slice(0, LIMITS.maxPhotos);
     if (images.length === 0) {
-      throw new UnsupportedError('Khong co anh hop le de dang len TikTok', { platform: this.id });
+      throw new UnsupportedError('No usable images to post to TikTok', { platform: this.id });
     }
     if (post.images.length > LIMITS.maxPhotos) {
-      this.logger.warn(`TikTok toi da ${LIMITS.maxPhotos} anh moi bai`, {
+      this.logger.warn(`TikTok allows at most ${LIMITS.maxPhotos} images per post`, {
         skipped: post.images.length - LIMITS.maxPhotos,
       });
     }
@@ -333,8 +333,8 @@ export class TikTokPlatform extends BasePlatform {
     // Giong video: noi dung co tai tro khong duoc o che do rieng tu.
     if (brandContent && privacyLevel === 'SELF_ONLY') {
       throw new ValidationError(
-        '[tiktok] brand_content_toggle khong dung duoc voi privacy_level=SELF_ONLY '
-        + '(noi dung thuong mai phai o che do public hoac friends)',
+        '[tiktok] brand_content_toggle cannot be used with privacy_level=SELF_ONLY '
+        + '(branded content must be public or friends-only)',
         { platform: this.id },
       );
     }
@@ -359,7 +359,7 @@ export class TikTokPlatform extends BasePlatform {
     const init = await this._call('/post/publish/content/init/', body, 'content/init');
     const publishId = init?.publish_id;
     if (!publishId) {
-      throw new PlatformError('TikTok khong tra ve publish_id (photo)', { platform: this.id, details: init });
+      throw new PlatformError('TikTok returned no publish_id (photo)', { platform: this.id, details: init });
     }
 
     const status = await this._waitForStatus(publishId, options, {
@@ -390,13 +390,13 @@ export class TikTokPlatform extends BasePlatform {
     this.assertMediaLimits(media);
     if (media.mime && !['image/jpeg', 'image/webp'].includes(media.mime)) {
       throw new UnsupportedError(
-        `[tiktok] chi nhan anh JPEG hoac WebP (nhan ${media.mime}). PNG/GIF phai chuyen doi truoc.`,
+        `[tiktok] only JPEG or WebP images are accepted (got ${media.mime}). Convert PNG/GIF first.`,
         { platform: this.id, details: { mime: media.mime } },
       );
     }
     if (media.size && media.size > LIMITS.maxPhotoBytes) {
       throw new UnsupportedError(
-        `[tiktok] moi anh toi da 20MB (file: ${Math.round(media.size / 1e6)}MB)`,
+        `[tiktok] each image may be at most 20MB (this file: ${Math.round(media.size / 1e6)}MB)`,
         { platform: this.id },
       );
     }
@@ -417,11 +417,11 @@ export class TikTokPlatform extends BasePlatform {
    */
   buildChunkPlan(size, preferredChunkSize) {
     if (!size || size <= 0) {
-      throw new UnsupportedError('Khong xac dinh duoc dung luong video', { platform: this.id });
+      throw new UnsupportedError('Could not determine the video size', { platform: this.id });
     }
     if (size > LIMITS.maxVideoBytes) {
       throw new UnsupportedError(
-        `[tiktok] video toi da 4GB (file: ${Math.round(size / 1e6)}MB)`,
+        `[tiktok] a video may be at most 4GB (this file: ${Math.round(size / 1e6)}MB)`,
         { platform: this.id },
       );
     }
@@ -468,7 +468,7 @@ export class TikTokPlatform extends BasePlatform {
    */
   async _uploadChunks(uploadUrl, media, plan, options) {
     if (!uploadUrl) {
-      throw new PlatformError('TikTok khong tra ve upload_url cho FILE_UPLOAD', { platform: this.id });
+      throw new PlatformError('TikTok returned no upload_url for FILE_UPLOAD', { platform: this.id });
     }
     const { video_size: total, chunk_size: chunkSize, total_chunk_count: count } = plan;
     const contentType = media.mime && ['video/mp4', 'video/quicktime', 'video/webm'].includes(media.mime)
@@ -527,7 +527,7 @@ export class TikTokPlatform extends BasePlatform {
         if (!retryable || attempt > maxRetries) throw err;
 
         const delayMs = Math.min(30_000, 1000 * 2 ** (attempt - 1));
-        this.logger.warn('chunk loi tam thoi, thu lai', {
+        this.logger.warn('chunk failed temporarily, retrying', {
           chunk: `${i + 1}/${count}`,
           attempt,
           delayMs,
@@ -536,7 +536,7 @@ export class TikTokPlatform extends BasePlatform {
         await sleep(delayMs, this.signal);
       }
     }
-    this.logger.info('da upload xong toan bo chunk', { chunks: count, bytes: total });
+    this.logger.info('all chunks uploaded', { chunks: count, bytes: total });
   }
 
   // ------------------------------------------------------------ trang thai bai
@@ -571,7 +571,7 @@ export class TikTokPlatform extends BasePlatform {
 
     if (result.failed) {
       const reason = String(result.reason ?? '');
-      throw new ProcessingError(`TikTok dang bai that bai: ${reason}`, {
+      throw new ProcessingError(`TikTok failed to publish the post: ${reason}`, {
         platform: this.id,
         retryable: RETRYABLE_FAIL_REASONS.has(reason),
         details: { publishId, failReason: reason },
@@ -579,7 +579,7 @@ export class TikTokPlatform extends BasePlatform {
       });
     }
     if (result.timedOut) {
-      this.logger.warn('het thoi gian cho TikTok xu ly - bai co the van dang duoc xu ly', { publishId });
+      this.logger.warn('timed out waiting for TikTok - the post may still be processing', { publishId });
       return { timedOut: true, raw: result.value?.raw };
     }
     return result.value;
@@ -637,8 +637,8 @@ export class TikTokPlatform extends BasePlatform {
     const brandOrganic = Boolean(options.brandOrganicToggle ?? this.config.brandOrganicToggle ?? false);
     if (brandContent && privacyLevel === 'SELF_ONLY') {
       throw new ValidationError(
-        '[tiktok] brand_content_toggle khong dung duoc voi privacy_level=SELF_ONLY '
-        + '(noi dung thuong mai phai o che do public hoac friends)',
+        '[tiktok] brand_content_toggle cannot be used with privacy_level=SELF_ONLY '
+        + '(branded content must be public or friends-only)',
         { platform: this.id },
       );
     }
@@ -661,14 +661,14 @@ export class TikTokPlatform extends BasePlatform {
     const wanted = String(options.privacyLevel ?? this.config.privacyLevel ?? 'SELF_ONLY').toUpperCase();
 
     if (allowed.length === 0) {
-      this.logger.warn('creator_info khong tra ve privacy_level_options - dung gia tri cau hinh', { wanted });
+      this.logger.warn('creator_info returned no privacy_level_options - using the configured value', { wanted });
       return wanted;
     }
     if (allowed.includes(wanted)) return wanted;
 
     // Fallback an toan: SELF_ONLY luon co trong danh sach.
     const fallback = allowed.includes('SELF_ONLY') ? 'SELF_ONLY' : allowed[0];
-    this.logger.warn('privacy_level yeu cau khong kha dung cho tai khoan nay - dung gia tri khac', {
+    this.logger.warn('the requested privacy_level is unavailable on this account - using another', {
       wanted,
       allowed,
       used: fallback,
@@ -681,7 +681,7 @@ export class TikTokPlatform extends BasePlatform {
     const maxSec = Number(creator.max_video_post_duration_sec);
     if (Number.isFinite(maxSec) && maxSec > 0 && media.durationSec && media.durationSec > maxSec) {
       throw new UnsupportedError(
-        `[tiktok] tai khoan nay chi dang duoc video toi da ${maxSec}s (video: ${Math.round(media.durationSec)}s)`,
+        `[tiktok] this account may only post videos up to ${maxSec}s (this video: ${Math.round(media.durationSec)}s)`,
         { platform: this.id, details: { maxSec, durationSec: media.durationSec } },
       );
     }
@@ -689,7 +689,7 @@ export class TikTokPlatform extends BasePlatform {
       const min = Math.min(media.width, media.height);
       const max = Math.max(media.width, media.height);
       if (min < LIMITS.minDimension || max > LIMITS.maxDimension) {
-        this.logger.warn('kich thuoc video ngoai khoang TikTok ho tro (360-4096px)', {
+        this.logger.warn('video dimensions are outside the range TikTok supports (360-4096px)', {
           width: media.width,
           height: media.height,
         });
@@ -706,8 +706,8 @@ export class TikTokPlatform extends BasePlatform {
       if (!use && media.isRemote) {
         // FILE_UPLOAD tren media tu xa phai doc theo HTTP Range; server nao khong
         // ho tro Range se lam chunk sai (Media.readRange se bao loi ro rang).
-        this.logger.warn('dang doc video tu URL theo tung chunk (HTTP Range)', {
-          hint: 'Neu server khong ho tro Range, hay tai file ve dia truoc hoac bat pullFromUrl.',
+        this.logger.warn('reading the video from a URL chunk by chunk (HTTP Range)', {
+          hint: 'If the server does not support Range, download the file to disk first or enable pullFromUrl.',
         });
       }
       return use;
@@ -779,7 +779,7 @@ export class TikTokPlatform extends BasePlatform {
     // access_token_invalid: refresh MOT lan roi goi lai (docs cho phep dung 1 lan).
     // Access token cua TikTok chi song 24h nen truong hop nay rat thuong gap.
     if (res.data?.error?.code === 'access_token_invalid' && !opts.forceRefresh && this.config.refreshToken) {
-      this.logger.warn('access token het han - refresh roi goi lai', { op });
+      this.logger.warn('access token expired - refreshing and retrying', { op });
       return this._rawCall(path, body, op, { forceRefresh: true });
     }
     return res;
@@ -796,7 +796,7 @@ export class TikTokPlatform extends BasePlatform {
         // Khong co refresh token -> dung access token nguoi dung truyen vao (song 24h).
         return { accessToken: this.config.accessToken, expiresInSec: 86_400 };
       }
-      throw new AuthError('[tiktok] thieu refreshToken', { platform: this.id, retryable: false });
+      throw new AuthError('[tiktok] refreshToken is missing', { platform: this.id, retryable: false });
     }
 
     const res = await this.http.request(TOKEN_URL, {
@@ -823,21 +823,21 @@ export class TikTokPlatform extends BasePlatform {
     // Endpoint OAuth co shape KHAC: {error: 'string', error_description, log_id}
     if (!res.ok || !data?.access_token) {
       throw new AuthError(
-        `[tiktok] khong lay duoc access token: ${data?.error ?? res.status} ${data?.error_description ?? ''}`,
+        `[tiktok] could not obtain an access token: ${data?.error ?? res.status} ${data?.error_description ?? ''}`,
         {
           platform: this.id,
           httpStatus: res.status,
           details: data,
           retryable: res.status >= 500,
-          hint: 'refresh_token song 365 ngay va XOAY moi lan refresh. '
-            + 'Neu module khong luu duoc token moi (dung MemoryTokenStore) thi lan sau se mat quyen - '
-            + 'hay cau hinh FileTokenStore (WAM_TOKEN_STORE).',
+          hint: 'A refresh_token lives 365 days and ROTATES on every refresh. '
+            + 'If the new token is not stored (for example with MemoryTokenStore), access is lost next time - '
+            + 'configure FileTokenStore (WAM_TOKEN_STORE).',
         },
       );
     }
 
     if (data.refresh_token && data.refresh_token !== refreshToken) {
-      this.logger.info('TikTok da xoay refresh_token - da luu token moi');
+      this.logger.info('TikTok rotated the refresh_token - the new one has been saved');
     }
     return {
       accessToken: data.access_token,
@@ -851,17 +851,17 @@ export class TikTokPlatform extends BasePlatform {
 // ------------------------------------------------------------------ helpers
 
 const FAIL_REASON_HINTS = {
-  file_format_check_failed: 'Dinh dang khong ho tro. Video: MP4/WebM/MOV + H.264. Anh: JPEG/WebP.',
-  duration_check_failed: 'Do dai video vuot gioi han cua creator (xem max_video_post_duration_sec).',
-  frame_rate_check_failed: 'FPS phai trong khoang 23-60.',
-  picture_size_check_failed: 'Kich thuoc anh khong hop le (toi da 1080p).',
-  video_pull_failed: 'TikTok khong tai duoc video tu URL. URL phai https, khong redirect, song it nhat 1 gio.',
-  photo_pull_failed: 'TikTok khong tai duoc anh tu URL. URL phai https, khong redirect.',
-  spam_risk_text: 'Caption bi coi la spam - giam hashtag/link, viet lai noi dung.',
-  spam_risk_too_many_posts: 'Creator da dang qua nhieu trong 24h (~15 bai/ngay, tinh chung moi ung dung).',
-  spam_risk_user_banned_from_posting: 'Tai khoan dang bi cam dang bai.',
-  auth_removed: 'Creator da thu hoi quyen truy cap - phai xin quyen lai.',
-  internal: 'Loi tam thoi cua TikTok - thu lai sau.',
+  file_format_check_failed: 'Unsupported format. Video: MP4/WebM/MOV with H.264. Images: JPEG/WebP.',
+  duration_check_failed: 'The video is longer than this creator allows (see max_video_post_duration_sec).',
+  frame_rate_check_failed: 'Frame rate must be between 23 and 60 fps.',
+  picture_size_check_failed: 'Invalid image dimensions (1080p maximum).',
+  video_pull_failed: 'TikTok could not fetch the video from the URL. It must be https, must not redirect, and must stay up for at least an hour.',
+  photo_pull_failed: 'TikTok could not fetch the image from the URL. It must be https and must not redirect.',
+  spam_risk_text: 'The caption was judged to be spam - use fewer hashtags and links, and rewrite it.',
+  spam_risk_too_many_posts: 'This creator has posted too much in 24h (~15 posts/day, counted across every app).',
+  spam_risk_user_banned_from_posting: 'This account is currently banned from posting.',
+  auth_removed: 'The creator revoked access - authorization must be requested again.',
+  internal: 'A temporary TikTok error - try again later.',
 };
 
 /** Dem do dai theo UTF-16 code unit (dung nhu TikTok tinh "runes"). */
@@ -916,37 +916,37 @@ export function mapChunkUploadError(status, text, ctx) {
     details: { ...ctx, body: String(text ?? '').slice(0, 300) },
   };
   if (status === 400) {
-    return new PlatformError(`[tiktok] chunk bi tu choi (400): header hoac so byte khong dung`, {
+    return new PlatformError(`[tiktok] chunk rejected (400): wrong headers or byte count`, {
       ...base,
       retryable: false,
-      hint: 'Kiem tra Content-Range/Content-Length. Chunk cuoi phai chua HET phan con lai (lon hon chunk_size).',
+      hint: 'Check Content-Range/Content-Length. The final chunk must carry ALL the remaining bytes (larger than chunk_size).',
     });
   }
   if (status === 416) {
-    return new PlatformError(`[tiktok] Content-Range khong khop (416)`, {
+    return new PlatformError(`[tiktok] Content-Range mismatch (416)`, {
       ...base,
       retryable: false,
-      hint: 'Byte offset sai. total_chunk_count = floor(video_size / chunk_size), offset ket thuc la INCLUSIVE.',
+      hint: 'Wrong byte offset. total_chunk_count = floor(video_size / chunk_size), and the end offset is INCLUSIVE.',
     });
   }
   if (status === 403) {
-    return new PlatformError(`[tiktok] upload_url het han hoac khong hop le (403)`, {
+    return new PlatformError(`[tiktok] upload_url expired or invalid (403)`, {
       ...base,
       retryable: false,
-      hint: 'upload_url chi song 1 gio. Phai goi init lai de lay URL moi.',
+      hint: 'An upload_url lives one hour. Call init again to get a new one.',
     });
   }
   if (status === 404) {
-    return new PlatformError(`[tiktok] upload task khong ton tai (404)`, {
+    return new PlatformError(`[tiktok] upload task does not exist (404)`, {
       ...base,
       retryable: false,
-      hint: 'Phai goi init lai.',
+      hint: 'Call init again.',
     });
   }
   if (status >= 500) {
-    return new PlatformError(`[tiktok] loi server khi upload chunk (${status})`, { ...base, retryable: true });
+    return new PlatformError(`[tiktok] server error while uploading a chunk (${status})`, { ...base, retryable: true });
   }
-  return new PlatformError(`[tiktok] upload chunk that bai (HTTP ${status})`, { ...base, retryable: false });
+  return new PlatformError(`[tiktok] chunk upload failed (HTTP ${status})`, { ...base, retryable: false });
 }
 
 /**
@@ -965,84 +965,84 @@ export function mapTikTokError(ctx) {
 
   switch (code) {
     case 'access_token_invalid':
-      return new AuthError(`[tiktok] access token khong hop le: ${message}`, {
+      return new AuthError(`[tiktok] invalid access token: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Module se tu refresh mot lan roi goi lai. Neu van loi thi refresh_token da het hieu luc -> xin quyen lai.',
+        hint: 'The module refreshes once and retries. If it still fails, the refresh_token is dead - authorize again.',
       });
     case 'scope_not_authorized':
-      return new AuthError(`[tiktok] token thieu scope: ${message}`, {
+      return new AuthError(`[tiktok] the token is missing a scope: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Direct post can scope video.publish; dang draft can video.upload. Xin lai quyen voi scope dung.',
+        hint: 'Direct posting needs video.publish; drafts need video.upload. Authorize again with the right scopes.',
       });
     case 'unaudited_client_can_only_post_to_private_accounts':
-      return new PlatformError(`[tiktok] app chua duoc audit: ${message}`, {
+      return new PlatformError(`[tiktok] this app has not passed audit: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'App chua audit chi dang duoc privacy_level=SELF_ONLY (va tai khoan phai o che do private). '
-          + 'Dat privacyLevel: "SELF_ONLY", hoac dung postMode: "MEDIA_UPLOAD" (draft) de creator tu dang public.',
+        hint: 'An unaudited app can only post with privacy_level=SELF_ONLY, and the account must be set to private. '
+          + 'Set privacyLevel: "SELF_ONLY", or use postMode: "MEDIA_UPLOAD" (draft) so the creator can publish publicly themselves.',
       });
     case 'privacy_level_option_mismatch':
-      return new PlatformError(`[tiktok] privacy_level khong hop le voi tai khoan: ${message}`, {
+      return new PlatformError(`[tiktok] privacy_level is not valid for this account: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Gia tri phai nam trong privacy_level_options tra ve tu creator_info/query.',
+        hint: 'The value must be one of the privacy_level_options returned by creator_info/query.',
       });
     case 'url_ownership_unverified':
-      return new PlatformError(`[tiktok] domain cua URL chua duoc xac minh: ${message}`, {
+      return new PlatformError(`[tiktok] the URL domain has not been verified: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'PULL_FROM_URL yeu cau domain/URL prefix da xac minh trong phan URL properties cua app. '
-          + 'Voi VIDEO co the dung FILE_UPLOAD de khong can xac minh; voi ANH thi buoc phai xac minh domain.',
+        hint: 'PULL_FROM_URL requires a domain/URL prefix verified under URL properties in your app. '
+          + 'VIDEO can use FILE_UPLOAD and skip verification; IMAGES always require a verified domain.',
       });
     case 'spam_risk_too_many_posts':
-      return new RateLimitError(`[tiktok] creator da dang qua nhieu bai trong 24h: ${message}`, {
+      return new RateLimitError(`[tiktok] this creator has posted too many times in 24h: ${message}`, {
         ...base,
         retryable: false,
         retryAfterMs: 60 * 60_000,
-        hint: 'Gioi han ~15 bai/ngay/creator, tinh CHUNG cho moi ung dung.',
+        hint: 'The limit is ~15 posts/day/creator, counted ACROSS every app.',
       });
     case 'spam_risk_too_many_pending_share':
-      return new RateLimitError(`[tiktok] qua nhieu draft dang cho (toi da 5/24h): ${message}`, {
+      return new RateLimitError(`[tiktok] too many drafts pending (5/24h maximum): ${message}`, {
         ...base,
         retryable: false,
         retryAfterMs: 60 * 60_000,
       });
     case 'spam_risk_user_banned_from_posting':
-      return new PlatformError(`[tiktok] tai khoan bi cam dang bai: ${message}`, {
+      return new PlatformError(`[tiktok] this account is banned from posting: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Ngung dang cho tai khoan nay va thong bao cho nguoi dung.',
+        hint: 'Stop publishing for this account and tell the person who owns it.',
       });
     case 'reached_active_user_cap':
-      return new RateLimitError(`[tiktok] het quota so nguoi dung dang bai trong 24h: ${message}`, {
+      return new RateLimitError(`[tiktok] the 24h cap on distinct posting users is used up: ${message}`, {
         ...base,
         retryable: false,
         retryAfterMs: 60 * 60_000,
-        hint: 'App chua audit chi cho 5 nguoi dung dang trong 24h.',
+        hint: 'An unaudited app allows only 5 posting users per 24h.',
       });
     case 'rate_limit_exceeded':
-      return new RateLimitError(`[tiktok] vuot gioi han tan suat: ${message}`, {
+      return new RateLimitError(`[tiktok] rate limit exceeded: ${message}`, {
         ...base,
         retryable: true,
-        hint: 'init: 6 req/phut, creator_info: 20 req/phut, status: 30 req/phut (tinh theo access_token).',
+        hint: 'init: 6 req/min, creator_info: 20 req/min, status: 30 req/min (per access_token).',
       });
     case 'invalid_param':
-      return new PlatformError(`[tiktok] tham so khong hop le: ${message}`, { ...base, retryable: false });
+      return new PlatformError(`[tiktok] invalid parameter: ${message}`, { ...base, retryable: false });
     case 'invalid_publish_id':
-      return new PlatformError(`[tiktok] publish_id khong ton tai: ${message}`, { ...base, retryable: false });
+      return new PlatformError(`[tiktok] publish_id does not exist: ${message}`, { ...base, retryable: false });
     case 'token_not_authorized_for_specified_publish_id':
-      return new PlatformError(`[tiktok] token khong khop voi publish_id: ${message}`, {
+      return new PlatformError(`[tiktok] the token does not match this publish_id: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Dang poll bang token cua tai khoan khac voi tai khoan da tao bai.',
+        hint: 'You are polling with a token for a different account than the one that created the post.',
       });
     case 'app_version_check_failed':
-      return new PlatformError(`[tiktok] app TikTok cua creator qua cu: ${message}`, {
+      return new PlatformError(`[tiktok] the creator's TikTok app is too old: ${message}`, {
         ...base,
         retryable: false,
-        hint: 'Che do MEDIA_UPLOAD cho anh yeu cau app TikTok >= 31.8.',
+        hint: 'MEDIA_UPLOAD mode for images requires TikTok app 31.8 or newer.',
       });
     default:
       break;
@@ -1052,9 +1052,9 @@ export function mapTikTokError(ctx) {
     return new RateLimitError(`[tiktok] 429 ${code}: ${message}`, { ...base, retryable: true });
   }
   if (status >= 500 || code === 'internal_error') {
-    return new PlatformError(`[tiktok] loi server (${code}): ${message}`, { ...base, retryable: true });
+    return new PlatformError(`[tiktok] server error (${code}): ${message}`, { ...base, retryable: true });
   }
-  return new PlatformError(`[tiktok] loi ${code}: ${message}`, {
+  return new PlatformError(`[tiktok] error ${code}: ${message}`, {
     ...base,
     retryable: RETRYABLE_ERROR_CODES.has(code),
   });

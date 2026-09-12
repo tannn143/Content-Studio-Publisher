@@ -51,7 +51,7 @@ export class TelegramPlatform extends BasePlatform {
 
   validateConfig() {
     this.requireConfig(['botToken', 'chatId'], {
-      hint: 'botToken lay tu @BotFather; chatId la @tenchannel hoac so id (-100...).',
+      hint: 'Get botToken from @BotFather; chatId is @yourchannel or a numeric id (-100...).',
     });
     return true;
   }
@@ -95,12 +95,12 @@ export class TelegramPlatform extends BasePlatform {
               ok: false,
               account: { bot: me.username, chats },
               error: new AuthError(
-                `Bot chua co quyen dang bai o chat ${chatId} (status: ${member?.status ?? 'unknown'})`,
+                `The bot cannot post in chat ${chatId} yet (status: ${member?.status ?? 'unknown'})`,
                 {
                   platform: this.id,
                   hint: isChannel
                     ? 'Them bot vao channel lam ADMIN va bat quyen "Post Messages".'
-                    : 'Them bot vao group va cap quyen gui tin nhan.',
+                    : 'Add the bot to the group and let it send messages.',
                 },
               ),
             };
@@ -142,13 +142,13 @@ export class TelegramPlatform extends BasePlatform {
       } catch (err) {
         // Da gui thanh cong o chat khac -> khong duoc quen, ghi lai roi bao o cuoi.
         failures.push({ chatId, error: /** @type {Error} */ (err).message });
-        this.logger.error('gui that bai o mot chat', { chatId, error: /** @type {Error} */ (err).message });
+        this.logger.error('sending failed for one chat', { chatId, error: /** @type {Error} */ (err).message });
         if (sent.length === 0 && chatId === this.chatIds[this.chatIds.length - 1]) throw err;
       }
     }
     if (sent.length === 0 && failures.length > 0) {
       throw new PlatformError(
-        `[telegram] khong gui duoc tin nao: ${failures.map((f) => `${f.chatId}: ${f.error}`).join('; ')}`,
+        `[telegram] no message could be sent: ${failures.map((f) => `${f.chatId}: ${f.error}`).join('; ')}`,
         { platform: this.id, details: { failures } },
       );
     }
@@ -245,7 +245,7 @@ export class TelegramPlatform extends BasePlatform {
       }
       raw = allRaw.length === 1 ? allRaw[0] : allRaw;
       if (groups.length > 1) {
-        this.logger.info('media duoc chia thanh nhieu album', { groups: groups.length });
+        this.logger.info('media split across several albums', { groups: groups.length });
       }
     }
 
@@ -324,10 +324,10 @@ export class TelegramPlatform extends BasePlatform {
       const urlMax = method === 'sendPhoto' ? LIMITS.urlPhotoBytes : LIMITS.urlFileBytes;
       if (media.size && media.size > urlMax) {
         if (media.isRemote) {
-          this.logger.warn('file co the vuot gioi han khi Telegram tu tai tu URL', {
+          this.logger.warn('the file may exceed the limit when Telegram fetches it from the URL', {
             size: media.size,
             urlMax,
-            hint: 'Anh qua URL toi da 5MB, file khac 20MB. Neu loi, hay tai file ve roi upload truc tiep.',
+            hint: 'Images via URL are capped at 5MB and other files at 20MB. If it fails, download the file and upload it directly.',
           });
         } else {
           // File local ma vuot gioi han URL -> upload truc tiep se tot hon.
@@ -350,7 +350,7 @@ export class TelegramPlatform extends BasePlatform {
     if (media.size && media.size > maxBytes) {
       throw new UnsupportedError(
         `[telegram] Bot API chi cho upload toi da ${Math.round(maxBytes / 1e6)}MB (file: ${Math.round(media.size / 1e6)}MB). `
-        + 'Cach xu ly: dung URL cong khai, hoac chay Local Bot API Server.',
+        + 'Options: use a public URL, or run a Local Bot API Server.',
         { platform: this.id, details: { size: media.size, maxBytes } },
       );
     }
@@ -370,7 +370,7 @@ export class TelegramPlatform extends BasePlatform {
       const thumb = toMedia(thumbInput);
       await thumb.load();
       if (thumb.size && thumb.size > 200 * 1024) {
-        this.logger.warn('thumbnail vuot 200KB - Telegram co the tu choi', { size: thumb.size });
+        this.logger.warn('the thumbnail is over 200KB - Telegram may reject it', { size: thumb.size });
       }
       form.append('thumbnail', await thumb.toBlob(), thumb.filename ?? 'thumb.jpg');
     }
@@ -386,7 +386,7 @@ export class TelegramPlatform extends BasePlatform {
     const { caption, parseMode, options, ...common } = ctx;
     if (medias.length > LIMITS.albumMax) {
       throw new UnsupportedError(
-        `[telegram] sendMediaGroup toi da ${LIMITS.albumMax} media (nhan ${medias.length})`,
+        `[telegram] sendMediaGroup takes at most ${LIMITS.albumMax} media (got ${medias.length})`,
         { platform: this.id },
       );
     }
@@ -580,7 +580,7 @@ export class TelegramPlatform extends BasePlatform {
       throw mapTelegramError(
         { status: res.status, data, text: res.text, res: res.res, url: `${method}` },
         method,
-      ) ?? new PlatformError(`[telegram] ${method} that bai`, { platform: 'telegram', details: data });
+      ) ?? new PlatformError(`[telegram] ${method} failed`, { platform: 'telegram', details: data });
     }
     return data.result;
   }
@@ -609,38 +609,38 @@ export function mapTelegramError(ctx, method = '') {
     return new RateLimitError(`[telegram] 429: ${desc}`, {
       ...base,
       retryAfterMs: retryAfterSec != null ? Number(retryAfterSec) * 1000 : undefined,
-      hint: 'Telegram gioi han ~30 tin/giay va ~20 tin/phut moi group. Giam tan suat gui.',
+      hint: 'Telegram allows about 30 messages/second and about 20 messages/minute per group. Send less often.',
     });
   }
   if (code === 401 || /unauthorized/i.test(desc)) {
-    return new AuthError(`[telegram] bot token khong hop le: ${desc}`, {
+    return new AuthError(`[telegram] invalid bot token: ${desc}`, {
       ...base,
-      hint: 'Kiem tra TELEGRAM_BOT_TOKEN.',
+      hint: 'Check TELEGRAM_BOT_TOKEN.',
     });
   }
   if (code === 403) {
-    return new AuthError(`[telegram] bi tu choi: ${desc}`, {
+    return new AuthError(`[telegram] forbidden: ${desc}`, {
       ...base,
-      hint: 'Bot chua duoc them vao channel/group, hoac chua co quyen dang bai (phai la admin).',
+      hint: 'The bot has not been added to the channel/group, or it cannot post (it must be an admin).',
     });
   }
   if (code === 400 && data?.parameters?.migrate_to_chat_id) {
     return new PlatformError(
-      `[telegram] group da chuyen thanh supergroup, chat_id moi: ${data.parameters.migrate_to_chat_id}`,
+      `[telegram] the group became a supergroup, new chat_id: ${data.parameters.migrate_to_chat_id}`,
       {
         ...base,
         retryable: false,
-        hint: `Cap nhat chatId thanh ${data.parameters.migrate_to_chat_id}`,
+        hint: `Update chatId to ${data.parameters.migrate_to_chat_id}`,
       },
     );
   }
   if (code === 400) {
     const hint = /chat not found/i.test(desc)
-      ? 'chat_id sai. Voi channel public dung @tenchannel; voi channel private dung id dang -100xxxxxxxxxx.'
+      ? 'Wrong chat_id. Use @yourchannel for a public channel, or an id like -100xxxxxxxxxx for a private one.'
       : /file is too big|too large/i.test(desc)
-        ? 'File vuot gioi han cua Bot API (10MB anh / 50MB file). Dung URL cong khai hoac Local Bot API Server.'
+        ? 'The file is over the Bot API limit (10MB for images, 50MB otherwise). Use a public URL or a Local Bot API Server.'
         : /can.t parse entities/i.test(desc)
-          ? 'Loi escape parse_mode. Dung parseMode HTML (an toan hon MarkdownV2) hoac parseMode "none".'
+          ? 'A parse_mode escaping error. Use parseMode HTML (safer than MarkdownV2) or parseMode "none".'
           : undefined;
     return new PlatformError(`[telegram] 400: ${desc}`, { ...base, retryable: false, hint });
   }

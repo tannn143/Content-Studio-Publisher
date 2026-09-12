@@ -212,7 +212,7 @@ test('telegram: 400 chat not found -> loi co goi y, khong retry', async () => {
   const post = await normalizePost({ title: 'x', media: 'https://cdn.test/a.jpg' });
   await assert.rejects(() => tg.publish(post), (err) => {
     assert.match(err.message, /chat not found/);
-    assert.match(err.hint, /chat_id sai/);
+    assert.match(err.hint, /Wrong chat_id/);
     assert.equal(err.retryable, false);
     return true;
   });
@@ -228,7 +228,7 @@ test('telegram: verifyCredentials phat hien bot khong phai admin', async () => {
   const tg = new TelegramPlatform({ botToken: '123:abc', chatId: '@ch' }, ctxWith(mock));
   const res = await tg.verifyCredentials();
   assert.equal(res.ok, false);
-  assert.match(res.error.message, /chua co quyen dang bai/);
+  assert.match(res.error.message, /cannot post in chat/);
 });
 
 test('telegram: nhieu chat -> gui lan luot tung chat', async () => {
@@ -417,7 +417,7 @@ test('youtube: anh -> bao loi ro rang (API khong dang anh)', async () => {
   const mock = createMockFetch([]);
   const yt = new YouTubePlatform({ clientId: 'c', clientSecret: 's', refreshToken: 'r' }, ctxWith(mock));
   const post = await normalizePost({ title: 't', media: { buffer: fakeJpeg(), filename: 'a.jpg' } });
-  await assert.rejects(() => yt.publish(post), /khong ho tro anh|chi dang duoc VIDEO/);
+  await assert.rejects(() => yt.publish(post), /does not support images|can only post VIDEO/);
 });
 
 test('youtube helpers: title/description/tags theo dung gioi han', () => {
@@ -498,7 +498,7 @@ test('facebook: anh PNG > 1MB bi tu choi som voi goi y', async () => {
     title: 'T',
     media: { buffer: fakePng(1_200_000), filename: 'a.png' },
   });
-  await assert.rejects(() => fb.publish(post), /PNG chi duoc toi da 1MB/);
+  await assert.rejects(() => fb.publish(post), /PNG image may be at most 1MB/);
 });
 
 test('facebook: Reels 3 pha - offset/file_size la HEADER, Authorization dung OAuth', async () => {
@@ -612,7 +612,7 @@ test('facebook: token 190 -> AuthError voi goi y theo subcode', async () => {
   const post = await normalizePost({ title: 'chi chu', description: 'x' });
   await assert.rejects(() => fb.publish(post), (err) => {
     assert.equal(err.code, 'E_AUTH');
-    assert.match(err.hint, /doi mat khau/);
+    assert.match(err.hint, /changed their password/);
     return true;
   });
 });
@@ -623,14 +623,14 @@ test('facebook: loi trong body voi HTTP 200 van duoc phat hien', async () => {
   ]);
   const fb = new FacebookPlatform({ pageId: '1', pageAccessToken: 'PAT' }, ctxWith(mock));
   const post = await normalizePost({ title: 'x', description: 'y' });
-  await assert.rejects(() => fb.publish(post), /tham so khong hop le/);
+  await assert.rejects(() => fb.publish(post), /invalid parameter/);
 });
 
 test('facebook: hen gio phai cach it nhat 10 phut', async () => {
   const mock = createMockFetch([{ match: '/feed', json: { id: '1_2' } }]);
   const fb = new FacebookPlatform({ pageId: '1', pageAccessToken: 'PAT' }, ctxWith(mock));
   const soon = await normalizePost({ title: 'x', description: 'y', scheduleAt: new Date(Date.now() + 60_000) });
-  await assert.rejects(() => fb.publish(soon), /it nhat 10 phut/);
+  await assert.rejects(() => fb.publish(soon), /at least 10 minutes/);
 
   const ok = await normalizePost({ title: 'x', description: 'y', scheduleAt: new Date(Date.now() + 3600_000) });
   await fb.publish(ok);
@@ -698,7 +698,7 @@ test('instagram: anh -> tao container, poll FINISHED, media_publish', async () =
 test('instagram: anh PNG bi tu choi (chi nhan JPEG)', async () => {
   const ig = new InstagramPlatform({ igUserId: 'X', accessToken: 'T' }, ctxWith(createMockFetch([])));
   const post = await normalizePost({ title: 'x', media: { buffer: fakePng(1000), filename: 'a.png' } });
-  await assert.rejects(() => ig.publish(post), /chi nhan anh JPEG/);
+  await assert.rejects(() => ig.publish(post), /only JPEG images/);
 });
 
 test('instagram: anh doc 9:16 bi tu choi voi huong dan crop', async () => {
@@ -771,7 +771,7 @@ test('instagram: container ERROR -> bao loi kem giai thich subcode', async () =>
   });
   await assert.rejects(() => ig.publish(post), (err) => {
     assert.match(err.message, /2207052/);
-    assert.match(err.hint, /URL phai cong khai/);
+    assert.match(err.hint, /must be public/);
     return true;
   });
 });
@@ -807,7 +807,7 @@ test('instagram: carousel 3 anh -> children noi bang dau phay', async () => {
 test('instagram: bai text-only bi tu choi', async () => {
   const ig = new InstagramPlatform({ igUserId: 'X', accessToken: 'T' }, ctxWith(createMockFetch([])));
   const post = await normalizePost({ title: 'chi chu', description: 'x' });
-  await assert.rejects(() => ig.publish(post), /khong dang duoc bai chi co chu|khong ho tro/);
+  await assert.rejects(() => ig.publish(post), /cannot post text only|does not support/);
 });
 
 test('instagram: user_tags bo x/y voi video, giu x/y voi anh', () => {
@@ -951,7 +951,7 @@ test('tiktok: video dai hon gioi han creator -> tu choi truoc khi upload', async
     media: { buffer: fakeMp4(1000), filename: 'v.mp4', duration: 300 },
     overrides: { tiktok: { probeMedia: false } },
   });
-  await assert.rejects(() => tk.publish(post), /toi da 60s/);
+  await assert.rejects(() => tk.publish(post), /only post videos up to/);
   assert.equal(mock.countRequests('/video/init/'), 0, 'khong duoc goi init');
 });
 

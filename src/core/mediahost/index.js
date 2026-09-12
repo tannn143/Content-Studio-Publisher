@@ -53,7 +53,7 @@ export class FunctionMediaHost {
   async host(media, ctx) {
     const res = await this.fn(media, ctx);
     if (typeof res === 'string') return { url: res };
-    if (!res?.url) throw new MediaError('MediaHost khong tra ve URL');
+    if (!res?.url) throw new MediaError('The MediaHost returned no URL');
     return res;
   }
 }
@@ -71,8 +71,8 @@ export class NoopMediaHost {
   async host(media) {
     if (media.publicUrl) return { url: media.publicUrl };
     throw new ConfigError(
-      'Nen tang nay yeu cau URL cong khai nhung media la file local va chua cau hinh `mediaHost`. '
-      + 'Hay truyen media dang URL, hoac cau hinh mediaHost (S3MediaHost / FunctionMediaHost / LocalTunnelMediaHost).',
+      'This platform requires a public URL, but the media is a local file and no `mediaHost` is configured. '
+      + 'Pass the media as a URL, or configure a mediaHost (S3MediaHost / FunctionMediaHost / LocalTunnelMediaHost).',
       { hint: 'Xem README muc "Media cong khai (mediaHost)".' },
     );
   }

@@ -104,8 +104,8 @@ export class SocialPoster {
     const Klass = this.registry[platformId];
     if (!Klass) {
       throw new ConfigError(
-        `Khong biet nen tang '${platformId}'${platformId === key ? '' : ` (kenh '${key}')`}. `
-        + `Cac nen tang ho tro: ${Object.keys(this.registry).join(', ')}`,
+        `Unknown platform '${platformId}'${platformId === key ? '' : ` (channel '${key}')`}. `
+        + `Supported platforms: ${Object.keys(this.registry).join(', ')}`,
         { details: { known: Object.keys(this.registry), key, platformId } },
       );
     }
@@ -115,7 +115,7 @@ export class SocialPoster {
   _buildInstances() {
     for (const [id, cfg] of Object.entries(this.platformConfigs)) {
       if (cfg.enabled === false) {
-        this.logger.debug('kenh bi tat trong cau hinh', { channel: id });
+        this.logger.debug('channel disabled in the configuration', { channel: id });
         continue;
       }
       const Klass = this._resolveClass(id, cfg);
@@ -167,7 +167,7 @@ export class SocialPoster {
    */
   platform(id) {
     const p = this.instances.get(id);
-    if (!p) throw new ConfigError(`Nen tang '${id}' chua duoc cau hinh`);
+    if (!p) throw new ConfigError(`Platform '${id}' is not configured`);
     return p;
   }
 
@@ -212,7 +212,7 @@ export class SocialPoster {
     const post = await normalizePost(input, { signal: opts.signal });
     const targets = this._resolveTargets(post, opts.platforms);
 
-    this.logger.info('bat dau dang bai', {
+    this.logger.info('publishing started', {
       platforms: targets.map((t) => t.id),
       media: post.media.length,
       hashtags: post.hashtags.length,
@@ -255,7 +255,7 @@ export class SocialPoster {
       post: post.toJSON(),
     };
 
-    this.logger.info('ket thuc dang bai', {
+    this.logger.info('publishing finished', {
       ok: report.ok,
       succeeded: report.succeeded,
       failed: report.failed,
@@ -269,7 +269,7 @@ export class SocialPoster {
         results.filter((r) => r.errorObject).map((r) => [r.platform, /** @type {Error} */ (r.errorObject)]),
       );
       throw new AggregatePostError(
-        `Dang bai that bai o: ${report.failed.join(', ')}`,
+        `Publishing failed on: ${report.failed.join(', ')}`,
         errors,
         { details: { report: { succeeded: report.succeeded, failed: report.failed } } },
       );
@@ -290,7 +290,7 @@ export class SocialPoster {
 
     const support = instance.supports(post);
     if (!support.ok) {
-      log.warn('bo qua nen tang', { reason: support.reason });
+      log.warn('platform skipped', { reason: support.reason });
       const err = new UnsupportedError(/** @type {string} */ (support.reason), { platform: id });
       return {
         platform: id,
@@ -306,13 +306,13 @@ export class SocialPoster {
     // Signal da bi huy truoc khi den luot minh (dang xep hang sau concurrency cap)
     // -> khong duoc dang nua.
     if (opts.signal?.aborted) {
-      const err = new AbortError('Da huy truoc khi dang len nen tang nay', { platform: id });
+      const err = new AbortError('Aborted before publishing to this platform', { platform: id });
       return {
         platform: id,
         channel: id,
         ok: false,
         skipped: true,
-        reason: 'da huy',
+        reason: 'aborted',
         durationMs: Date.now() - started,
         error: err.toJSON(),
         errorObject: err,
@@ -333,7 +333,7 @@ export class SocialPoster {
 
     try {
       await this.hooks.onPlatformStart?.({ platform: id, post });
-      log.info('dang gui bai');
+      log.info('sending the post');
       const res = await runner.publish(post);
       const outcome = /** @type {PlatformOutcome} */ ({
         channel: id,
@@ -348,12 +348,12 @@ export class SocialPoster {
         meta: res.meta,
         durationMs: Date.now() - started,
       });
-      log.info('dang bai thanh cong', { id: res.id, url: res.url, status: res.status, ms: outcome.durationMs });
+      log.info('post published', { id: res.id, url: res.url, status: res.status, ms: outcome.durationMs });
       await this.hooks.onPlatformSuccess?.({ platform: id, result: outcome, post });
       return outcome;
     } catch (rawErr) {
       const err = toSocialPostError(rawErr, { platform: id });
-      log.error('dang bai that bai', { code: err.code, message: err.message, hint: err.hint });
+      log.error('publishing failed', { code: err.code, message: err.message, hint: err.hint });
       await this.hooks.onPlatformError?.({ platform: id, error: err, post });
       return {
         platform: id,
@@ -400,14 +400,14 @@ export class SocialPoster {
     const all = [...this.instances.entries()].map(([id, instance]) => ({ id, instance }));
     if (!wanted || wanted.length === 0) {
       if (all.length === 0) {
-        throw new ConfigError('Chua cau hinh nen tang nao. Truyen `platforms` khi khoi tao SocialPoster.');
+        throw new ConfigError('No platform is configured. Pass `platforms` when constructing SocialPoster.');
       }
       return all;
     }
     const unknown = wanted.filter((id) => !this.instances.has(id));
     if (unknown.length > 0) {
       throw new ConfigError(
-        `Nen tang chua duoc cau hinh hoac dang bi tat: ${unknown.join(', ')}. Dang bat: ${this.enabledPlatforms.join(', ') || '(khong co)'}`,
+        `These platforms are not configured or are disabled: ${unknown.join(', ')}. Enabled: ${this.enabledPlatforms.join(', ') || '(none)'}`,
         { details: { unknown, enabled: this.enabledPlatforms } },
       );
     }

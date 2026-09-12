@@ -186,7 +186,7 @@ export class Media {
     const { fetchImpl = fetch, signal, probeRemote = true } = opts;
 
     if (this.source === 'buffer') {
-      if (!Buffer.isBuffer(this.buffer)) throw new MediaError('Media buffer khong hop le');
+      if (!Buffer.isBuffer(this.buffer)) throw new MediaError('Invalid media buffer');
       this.size = this.buffer.byteLength;
       this.mime ??= sniffMime(this.buffer.subarray(0, 64)) ?? mimeFromName(this.filename);
       this.filename ??= `upload${this.extension || '.bin'}`;
@@ -196,10 +196,10 @@ export class Media {
       try {
         st = await stat(p);
       } catch (err) {
-        throw new MediaError(`Khong doc duoc file media: ${p}`, { cause: err, details: { filePath: p } });
+        throw new MediaError(`Could not read the media file: ${p}`, { cause: err, details: { filePath: p } });
       }
-      if (!st.isFile()) throw new MediaError(`Duong dan media khong phai file: ${p}`);
-      if (st.size === 0) throw new MediaError(`File media rong: ${p}`);
+      if (!st.isFile()) throw new MediaError(`The media path is not a file: ${p}`);
+      if (st.size === 0) throw new MediaError(`The media file is empty: ${p}`);
       this.size = st.size;
       this.filename ??= path.basename(p);
       if (!this.mime) {
@@ -216,7 +216,7 @@ export class Media {
 
     this.kind ??= this.mime ? kindFromMime(this.mime) : 'unknown';
     if (!this.mime) {
-      throw new MediaError('Khong xac dinh duoc dinh dang media. Hay truyen ro `mime` hoac `type`.', {
+      throw new MediaError('Could not determine the media type. Pass `mime` or `type` explicitly.', {
         details: { source: this.source, filename: this.filename, url: this.url },
       });
     }
@@ -290,23 +290,23 @@ export class Media {
       redirect: 'follow',
     });
     if (!res.ok) {
-      throw new MediaError(`Khong tai duoc range tu URL (HTTP ${res.status})`, { details: { url: this.url } });
+      throw new MediaError(`Could not fetch a byte range from the URL (HTTP ${res.status})`, { details: { url: this.url } });
     }
     const wantsPartial = !(start === 0 && end >= (this.size ?? Infinity) - 1);
     if (wantsPartial && res.status !== 206) {
       await res.body?.cancel?.().catch(() => {});
       throw new MediaError(
-        `Server khong ho tro HTTP Range (tra ve ${res.status} thay vi 206) - khong the doc tung phan an toan`,
+        `The server does not support HTTP Range (returned ${res.status} instead of 206), so partial reads are not safe`,
         {
           details: { url: this.url, status: res.status, start, end },
-          hint: 'Tai file ve dia truoc (hoac dung media dang file/buffer) roi hay upload theo chunk.',
+          hint: 'Download the file to disk first (or use a file/buffer media source), then upload in chunks.',
         },
       );
     }
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.byteLength > length) {
       throw new MediaError(
-        `Server tra ve ${buf.byteLength} byte thay vi ${length} byte da yeu cau`,
+        `The server returned ${buf.byteLength} bytes instead of the ${length} bytes requested`,
         { details: { url: this.url, start, end } },
       );
     }
@@ -323,7 +323,7 @@ export class Media {
     const { maxBytes } = opts;
     if (maxBytes != null && this.size != null && this.size > maxBytes) {
       throw new MediaError(
-        `Media ${formatBytes(this.size)} vuot gioi han ${formatBytes(maxBytes)}`,
+        `Media is ${formatBytes(this.size)}, over the ${formatBytes(maxBytes)} limit`,
         { details: { size: this.size, maxBytes } },
       );
     }
@@ -333,10 +333,10 @@ export class Media {
       return readFile(/** @type {string} */ (this.filePath));
     }
     const res = await fetch(/** @type {string} */ (this.url), { redirect: 'follow' });
-    if (!res.ok) throw new MediaError(`Khong tai duoc media tu URL (HTTP ${res.status})`, { details: { url: this.url } });
+    if (!res.ok) throw new MediaError(`Could not download the media from the URL (HTTP ${res.status})`, { details: { url: this.url } });
     const buf = Buffer.from(await res.arrayBuffer());
     if (maxBytes != null && buf.byteLength > maxBytes) {
-      throw new MediaError(`Media ${formatBytes(buf.byteLength)} vuot gioi han ${formatBytes(maxBytes)}`);
+      throw new MediaError(`Media is ${formatBytes(buf.byteLength)}, over the ${formatBytes(maxBytes)} limit`);
     }
     return buf;
   }
@@ -352,7 +352,7 @@ export class Media {
       return Readable.from(/** @type {Buffer} */ (this.buffer));
     }
     const res = await fetch(/** @type {string} */ (this.url), { redirect: 'follow' });
-    if (!res.ok || !res.body) throw new MediaError(`Khong stream duoc media tu URL (HTTP ${res.status})`);
+    if (!res.ok || !res.body) throw new MediaError(`Could not stream the media from the URL (HTTP ${res.status})`);
     return res.body;
   }
 
@@ -446,7 +446,7 @@ export function toMedia(input) {
   if (input instanceof Media) return input;
   if (typeof input === 'string') {
     const s = input.trim();
-    if (!s) throw new MediaError('Media rong');
+    if (!s) throw new MediaError('The media is empty');
     return isHttpUrl(s)
       ? new Media({ source: 'url', url: s })
       : new Media({ source: 'file', filePath: path.resolve(s) });
@@ -487,7 +487,7 @@ export function toMedia(input) {
         : new Media({ ...common, source: 'file', filePath: path.resolve(p) });
     }
   }
-  throw new MediaError('Media khong hop le: can string duong dan/URL, {path}, {url} hoac {buffer}', {
+  throw new MediaError('Invalid media: expected a path/URL string, {path}, {url} or {buffer}', {
     details: { received: typeof input },
   });
 }

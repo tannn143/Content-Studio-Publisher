@@ -230,7 +230,7 @@ test('connectTelegram: bao loi khi bot chua la admin', async () => {
   ]);
   await assert.rejects(
     () => connectTelegram({ botToken: '1:a', chatId: '@x', http: mock.http }),
-    /chua co quyen dang bai/,
+    /cannot post yet/,
   );
 });
 
@@ -476,8 +476,8 @@ test('API: OAuth start bao loi ro khi chua cau hinh app', async () => {
   await withServer(async ({ call }) => {
     const res = await call('/api/oauth/google/start', { method: 'POST', body: '{}' });
     assert.equal(res.status, 400);
-    assert.match(res.data.error, /Chua cau hinh/);
-    assert.match(res.data.hint, /Cai dat/);
+    assert.match(res.data.error, /is not configured yet/);
+    assert.match(res.data.hint, /Settings tab/);
   });
 });
 
@@ -527,7 +527,7 @@ test('API: OAuth callback voi state sai -> redirect kem thong bao loi', async ()
     const loc = res.headers.get('location');
     assert.match(loc, /error=/);
     const msg = new URLSearchParams(loc.split('?')[1].split('#')[0]).get('error');
-    assert.match(msg, /State khong hop le/);
+    assert.match(msg, /state is invalid/);
   });
 });
 
@@ -689,7 +689,7 @@ test('PublishService: bao loi ro khi file media bi xoa khoi dia', async () => {
       workspace: ws,
       logger: { info() {}, warn() {}, error() {}, debug() {}, trace() {}, child() { return this; }, level: 'silent' },
     });
-    await assert.rejects(() => publisher.publishPost(post.id), /Thieu file media/);
+    await assert.rejects(() => publisher.publishPost(post.id), /Media files missing/);
     const after = await ws.posts.get(post.id);
     assert.equal(after.status, 'failed');
   } finally {
@@ -767,7 +767,7 @@ test('API: creator-info tu choi kenh khong phai TikTok', async () => {
     const channels = await handle.workspace.listChannels();
     const { status, data } = await call(`/api/channels/${channels[0].id}/creator-info`);
     assert.equal(status, 400);
-    assert.match(String(data.error), /khong phai TikTok/i);
+    assert.match(String(data.error), /not a TikTok account/i);
   });
 });
 
@@ -1102,7 +1102,7 @@ test('phan quyen: member KHONG dang duoc len kenh chua duoc cap', async () => {
     const nv = await loginAs(base, 'nhanvien', password);
     const res = await nv.call(`/api/posts/${post.id}/publish`, { method: 'POST', body: '{}' });
     assert.equal(res.status, 403, 'server phai chan, khong chi an tren UI');
-    assert.match(String(res.data.error), /khong duoc cap quyen/i);
+    assert.match(String(res.data.error), /not been granted access/i);
   });
 });
 
@@ -1124,7 +1124,7 @@ test('phan quyen: khong co canPublish thi soan duoc nhung khong dang duoc', asyn
 
     const res = await nv.call(`/api/posts/${draft.data.post.id}/publish`, { method: 'POST', body: '{}' });
     assert.equal(res.status, 403);
-    assert.match(String(res.data.error), /chi duoc soan bai/i);
+    assert.match(String(res.data.error), /only draft posts/i);
   });
 });
 

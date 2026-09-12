@@ -173,8 +173,8 @@ test('toMedia: nhan dien URL vs duong dan', () => {
 });
 
 test('toMedia: input sai thi nem MediaError', () => {
-  assert.throws(() => toMedia(42), /Media khong hop le/);
-  assert.throws(() => toMedia(''), /Media rong/);
+  assert.throws(() => toMedia(42), /Invalid media/);
+  assert.throws(() => toMedia(''), /media is empty/);
 });
 
 test('Media.load + readRange tu buffer', async () => {
@@ -191,7 +191,7 @@ test('Media.load + readRange tu buffer', async () => {
 test('Media.toBuffer ton trong maxBytes', async () => {
   const media = toMedia({ buffer: fakeJpeg(100) });
   await media.load();
-  await assert.rejects(() => media.toBuffer({ maxBytes: 50 }), /vuot gioi han/);
+  await assert.rejects(() => media.toBuffer({ maxBytes: 50 }), /over the .* limit/);
 });
 
 test('Media: aspectRatio va isVertical', () => {
@@ -227,7 +227,7 @@ test('normalizePost: tu choi bai rong', async () => {
 });
 
 test('normalizePost: tu choi link sai', async () => {
-  await assert.rejects(() => normalizePost({ title: 'x', link: 'ftp://a' }), /link phai bat dau/);
+  await assert.rejects(() => normalizePost({ title: 'x', link: 'ftp://a' }), /link must start with/);
 });
 
 test('normalizePost: tu choi scheduleAt sai', async () => {

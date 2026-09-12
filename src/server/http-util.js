@@ -98,7 +98,7 @@ export class Router {
           try {
             params[rp.slice(1)] = decodeURIComponent(parts[i]);
           } catch {
-            throw new HttpError(400, 'URL chua ky tu escape khong hop le');
+            throw new HttpError(400, 'The URL contains an invalid escape sequence');
           }
         } else if (rp !== parts[i]) {
           ok = false;
@@ -123,7 +123,7 @@ export async function readJsonBody(req, maxBytes = 2_000_000) {
   try {
     return JSON.parse(raw.toString('utf8'));
   } catch {
-    throw new HttpError(400, 'Body khong phai JSON hop le');
+    throw new HttpError(400, 'The body is not valid JSON');
   }
 }
 
@@ -141,7 +141,7 @@ export function readRawBody(req, maxBytes) {
     req.on('data', (c) => {
       total += c.length;
       if (total > maxBytes) {
-        reject(new HttpError(413, `Du lieu vuot gioi han ${Math.round(maxBytes / 1e6)}MB`));
+        reject(new HttpError(413, `The data is over the ${Math.round(maxBytes / 1e6)}MB limit`));
         req.destroy();
         return;
       }
@@ -178,7 +178,7 @@ export async function pipeBodyToFile(req, filePath, maxBytes) {
     req.on('data', (c) => {
       total += c.length;
       if (total > maxBytes) {
-        void fail(new HttpError(413, `File vuot gioi han ${Math.round(maxBytes / 1e6)}MB`));
+        void fail(new HttpError(413, `The file is over the ${Math.round(maxBytes / 1e6)}MB limit`));
         req.destroy();
       }
     });
@@ -233,9 +233,9 @@ export async function sendFile(req, res, filePath, opts = {}) {
   try {
     st = await stat(filePath);
   } catch {
-    throw new HttpError(404, 'Khong tim thay file');
+    throw new HttpError(404, 'File not found');
   }
-  if (!st.isFile()) throw new HttpError(404, 'Khong tim thay file');
+  if (!st.isFile()) throw new HttpError(404, 'File not found');
 
   const type = opts.contentType
     ?? STATIC_MIME[path.extname(filePath).toLowerCase()]

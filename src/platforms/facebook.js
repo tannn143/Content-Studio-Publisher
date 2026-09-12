@@ -72,8 +72,8 @@ export class FacebookPlatform extends BasePlatform {
 
   validateConfig() {
     this.requireConfig(['pageId', 'pageAccessToken'], {
-      hint: 'pageAccessToken phai la PAGE token sinh tu USER token DAI HAN (60 ngay) qua GET /me/accounts, '
-        + 'neu khong token se het han sau 1-2 gio. Cach de nhat: chay `npm run serve` roi ket noi o tab "Kenh" (module tu doi token dai han).',
+      hint: 'pageAccessToken must be a PAGE token derived from a LONG-LIVED (60-day) USER token via GET /me/accounts, '
+        + 'otherwise the token expires in 1-2 hours. Easiest path: run `npm run serve` and connect on the Channels tab (the module handles the long-lived exchange).',
     });
     return true;
   }
@@ -98,8 +98,8 @@ export class FacebookPlatform extends BasePlatform {
         return {
           ok: false,
           error: new AuthError(
-            'Nguoi dung cua token nay khong co quyen CREATE_CONTENT tren Page',
-            { platform: this.id, details: { tasks }, hint: 'Cap role co quyen dang bai cho user tren Page.' },
+            'The user behind this token does not hold the CREATE_CONTENT task on the Page',
+            { platform: this.id, details: { tasks }, hint: 'Give the user a Page role that can publish.' },
           ),
         };
       }
@@ -120,7 +120,7 @@ export class FacebookPlatform extends BasePlatform {
     if (post.videos.length > 0) {
       const media = post.videos[0];
       if (post.videos.length > 1) {
-        this.logger.warn('Facebook chi dang duoc 1 video moi bai - cac video sau bi bo qua', {
+        this.logger.warn('Facebook posts one video at a time - the rest were skipped', {
           skipped: post.videos.length - 1,
         });
       }
@@ -146,7 +146,7 @@ export class FacebookPlatform extends BasePlatform {
   async _publishText(post, options, scheduledTs) {
     const caption = this.buildCaption(post, options);
     if (!caption.text && !post.link) {
-      throw new ValidationError('Bai text-only can `message` hoac `link`', { platform: this.id });
+      throw new ValidationError('A text-only post needs `message` or `link`', { platform: this.id });
     }
 
     /** @type {Record<string, any>} */
@@ -200,7 +200,7 @@ export class FacebookPlatform extends BasePlatform {
     const images = post.images;
     for (const m of images) this._assertPhoto(m);
 
-    this.logger.info('upload anh cho album', { count: images.length });
+    this.logger.info('uploading images for the album', { count: images.length });
     /** @type {string[]} */
     const fbids = [];
     for (const [i, media] of images.entries()) {
@@ -214,7 +214,7 @@ export class FacebookPlatform extends BasePlatform {
         data = await this._postMultipart(`/${this.config.pageId}/photos`, form);
       }
       if (!data?.id) {
-        throw new PlatformError(`Khong lay duoc media_fbid cho anh #${i + 1}`, { platform: this.id, details: data });
+        throw new PlatformError(`No media_fbid returned for image #${i + 1}`, { platform: this.id, details: data });
       }
       fbids.push(String(data.id));
       this.logger.debug('da upload anh album', { index: i + 1, total: images.length, mediaFbid: data.id });
@@ -256,14 +256,14 @@ export class FacebookPlatform extends BasePlatform {
     this.assertMediaLimits(media);
     if (media.mime === 'image/png' && media.size && media.size > LIMITS.pngBytes) {
       throw new UnsupportedError(
-        `[facebook] anh PNG chi duoc toi da 1MB (file: ${Math.round(media.size / 1024)}KB). `
-        + 'Chuyen sang JPEG truoc khi dang.',
+        `[facebook] a PNG image may be at most 1MB (this file: ${Math.round(media.size / 1024)}KB). `
+        + 'Convert it to JPEG before posting.',
         { platform: this.id, details: { size: media.size, mime: media.mime } },
       );
     }
     if (media.size && media.size > LIMITS.photoBytes) {
       throw new UnsupportedError(
-        `[facebook] anh toi da 4MB (file: ${Math.round(media.size / 1e6)}MB)`,
+        `[facebook] an image may be at most 4MB (this file: ${Math.round(media.size / 1e6)}MB)`,
         { platform: this.id, details: { size: media.size } },
       );
     }
@@ -317,7 +317,7 @@ export class FacebookPlatform extends BasePlatform {
 
     const videoId = data?.id ?? data?.video_id;
     if (!videoId) {
-      throw new PlatformError('Facebook khong tra ve video id', { platform: this.id, details: data });
+      throw new PlatformError('Facebook returned no video id', { platform: this.id, details: data });
     }
 
     const status = (options.waitForProcessing ?? this.config.waitForProcessing ?? true)
@@ -350,7 +350,7 @@ export class FacebookPlatform extends BasePlatform {
     const videoId = start?.video_id;
     const uploadUrl = start?.upload_url ?? `${RUPLOAD_HOST}/video-upload/${this.version}/${videoId}`;
     if (!videoId) {
-      throw new PlatformError('Reels: khong nhan duoc video_id o pha start', { platform: this.id, details: start });
+      throw new PlatformError('Reels: no video_id returned in the start phase', { platform: this.id, details: start });
     }
 
     // Pha 2: day binary (hoac de Meta tu keo tu file_url). offset/file_size/file_url la HEADER.
@@ -376,7 +376,7 @@ export class FacebookPlatform extends BasePlatform {
 
     const done = await this._post(`/${this.config.pageId}/video_reels`, finish);
     if (done?.success === false) {
-      throw new PlatformError(`Reels finish that bai: ${done?.message ?? 'unknown'}`, {
+      throw new PlatformError(`The Reels finish phase failed: ${done?.message ?? 'unknown'}`, {
         platform: this.id,
         details: done,
       });
@@ -423,7 +423,7 @@ export class FacebookPlatform extends BasePlatform {
     }
 
     const total = media.size ?? 0;
-    if (!total) throw new UnsupportedError('Khong xac dinh duoc dung luong video', { platform: this.id });
+    if (!total) throw new UnsupportedError('Could not determine the video size', { platform: this.id });
 
     const buf = await media.toBuffer({ maxBytes: LIMITS.resumableVideoBytes });
     const res = await this.http.request(uploadUrl, {
@@ -458,16 +458,16 @@ export class FacebookPlatform extends BasePlatform {
     const userToken = this.config.userAccessToken ?? this.config.appAccessToken;
     if (!appId || !userToken) {
       throw new UnsupportedError(
-        `[facebook] video ${Math.round((media.size ?? 0) / 1e6)}MB vuot 1GB nen phai dung Resumable Upload API, `
-        + 'can cau hinh them `appId` va `userAccessToken`.',
-        { platform: this.id, hint: 'Hoac nen giam dung luong video xuong duoi 1GB.' },
+        `[facebook] a ${Math.round((media.size ?? 0) / 1e6)}MB video is over 1GB, so the Resumable Upload API is required, `
+        + 'which also needs `appId` and `userAccessToken`.',
+        { platform: this.id, hint: 'Alternatively, bring the video under 1GB.' },
       );
     }
 
     if (!media.size) {
       throw new UnsupportedError(
-        'Resumable Upload API can biet dung luong file (file_length) nhung media nay khong xac dinh duoc.',
-        { platform: this.id, hint: 'Dung file local, hoac URL co tra ve Content-Length.' },
+        'The Resumable Upload API needs the file size (file_length), which cannot be determined for this media.',
+        { platform: this.id, hint: 'Use a local file, or a URL that returns Content-Length.' },
       );
     }
 
@@ -493,7 +493,7 @@ export class FacebookPlatform extends BasePlatform {
 
     const sessionId = session?.id; // dang 'upload:<SESSION_ID>'
     if (!sessionId) {
-      throw new PlatformError('Resumable Upload: khong nhan duoc upload session id', {
+      throw new PlatformError('Resumable Upload: no upload session id returned', {
         platform: this.id,
         details: session,
       });
@@ -519,7 +519,7 @@ export class FacebookPlatform extends BasePlatform {
       });
 
       if (res.ok && res.data?.h) {
-        this.logger.info('Resumable Upload xong', { bytes: media.size });
+        this.logger.info('resumable upload complete', { bytes: media.size });
         return res.data.h;
       }
       // Hoi server xem da nhan den byte nao roi tiep tuc.
@@ -535,12 +535,12 @@ export class FacebookPlatform extends BasePlatform {
         throw mapFacebookError(
           { status: res.status, data: res.data, text: res.text, res: res.res, url: 'uploads:transfer' },
           'uploads:transfer',
-        ) ?? new PlatformError('Resumable Upload that bai', { platform: this.id, details: res.data });
+        ) ?? new PlatformError('Resumable upload failed', { platform: this.id, details: res.data });
       }
       offset = next;
-      this.logger.warn('Resumable Upload tiep tuc tu offset', { offset });
+      this.logger.warn('resuming the upload from an offset', { offset });
     }
-    throw new PlatformError('Resumable Upload: vuot so lan thu lai', { platform: this.id });
+    throw new PlatformError('Resumable upload: out of retries', { platform: this.id });
   }
 
   _shouldUseResumable(media, options) {
@@ -553,7 +553,7 @@ export class FacebookPlatform extends BasePlatform {
   _assertResumableVideoLimits(media) {
     if (media.durationSec && media.durationSec > LIMITS.resumableVideoSec) {
       throw new UnsupportedError(
-        `[facebook] video ${Math.round(media.durationSec / 60)} phut vuot gioi han 45 phut cua Facebook`,
+        `[facebook] a ${Math.round(media.durationSec / 60)}-minute video is over Facebook's 45-minute limit`,
         { platform: this.id, details: { durationSec: media.durationSec } },
       );
     }
@@ -563,14 +563,14 @@ export class FacebookPlatform extends BasePlatform {
   _assertSimpleVideoLimits(media) {
     if (media.size && media.size > LIMITS.simpleVideoBytes) {
       throw new UnsupportedError(
-        `[facebook] upload 1 lan chi toi da 1GB (file: ${Math.round(media.size / 1e6)}MB). `
-        + 'Bat `resumable: true` va cau hinh appId + userAccessToken.',
+        `[facebook] a single-shot upload may be at most 1GB (this file: ${Math.round(media.size / 1e6)}MB). `
+        + 'Enable `resumable: true` and configure appId + userAccessToken.',
         { platform: this.id },
       );
     }
     if (media.durationSec && media.durationSec > LIMITS.simpleVideoSec) {
       throw new UnsupportedError(
-        `[facebook] upload 1 lan chi toi da 20 phut (video: ${Math.round(media.durationSec / 60)} phut)`,
+        `[facebook] a single-shot upload may be at most 20 minutes (this video: ${Math.round(media.durationSec / 60)} minutes)`,
         { platform: this.id },
       );
     }
@@ -596,9 +596,9 @@ export class FacebookPlatform extends BasePlatform {
     if (media.width && media.height && media.height <= media.width) {
       issues.push(`ty le ${media.width}x${media.height} (Reels yeu cau 9:16 doc)`);
     }
-    if (media.width && media.width < 540) issues.push(`do rong ${media.width}px (toi thieu 540x960)`);
+    if (media.width && media.width < 540) issues.push(`width ${media.width}px (540x960 minimum)`);
     if (issues.length > 0) {
-      this.logger.warn('video khong dat chuan Reels, Facebook co the tu choi', { issues });
+      this.logger.warn('this video does not meet the Reels requirements; Facebook may reject it', { issues });
     }
   }
 
@@ -624,13 +624,13 @@ export class FacebookPlatform extends BasePlatform {
       { timeoutMs: options.uploadStatusTimeoutMs ?? 10 * 60_000, intervalMs: 2000, maxIntervalMs: 10_000 },
     );
     if (result.failed) {
-      throw new ProcessingError(`Facebook nhan video that bai: ${result.reason}`, {
+      throw new ProcessingError(`Facebook failed to receive the video: ${result.reason}`, {
         platform: this.id,
         details: { videoId },
       });
     }
     if (result.timedOut) {
-      this.logger.warn('het thoi gian cho pha upload, van tiep tuc finish', { videoId });
+      this.logger.warn('timed out waiting for the upload phase, continuing to finish anyway', { videoId });
     }
     return result.value;
   }
@@ -662,14 +662,14 @@ export class FacebookPlatform extends BasePlatform {
     );
 
     if (result.failed) {
-      throw new ProcessingError(`Facebook xu ly video that bai: ${result.reason}`, {
+      throw new ProcessingError(`Facebook failed to process the video: ${result.reason}`, {
         platform: this.id,
         details: { videoId, reason: result.reason },
-        hint: 'Kiem tra codec (H.264/AAC), ty le khung hinh trong khoang 9:16 - 16:9, va do dai video.',
+        hint: 'Check the codec (H.264/AAC), an aspect ratio between 9:16 and 16:9, and the video length.',
       });
     }
     if (result.timedOut) {
-      this.logger.warn('het thoi gian cho xu ly video', { videoId });
+      this.logger.warn('timed out waiting for video processing', { videoId });
       return { timedOut: true, attempts: result.attempts };
     }
     return { ...result.value, attempts: result.attempts };
@@ -681,7 +681,7 @@ export class FacebookPlatform extends BasePlatform {
       const data = await this._get(`/${videoId}`, { fields: 'post_id,permalink_url' });
       return data?.post_id;
     } catch (err) {
-      this.logger.debug('khong lay duoc post_id cua video', { videoId, error: String(err) });
+      this.logger.debug('could not read the post_id for this video', { videoId, error: String(err) });
       return undefined;
     }
   }
@@ -700,13 +700,13 @@ export class FacebookPlatform extends BasePlatform {
     const delta = when.getTime() - Date.now();
     if (delta < LIMITS.scheduleMinMs) {
       throw new ValidationError(
-        'Facebook yeu cau thoi diem hen gio cach hien tai it nhat 10 phut',
+        'Facebook requires a scheduled time at least 10 minutes from now',
         { platform: this.id, details: { scheduleAt: when.toISOString() } },
       );
     }
     if (delta > LIMITS.scheduleMaxMs) {
       throw new ValidationError(
-        'Facebook chi cho hen gio toi da 29 ngay (an toan cho moi loai bai)',
+        'Facebook allows scheduling at most 29 days ahead (safe for every post type)',
         { platform: this.id, details: { scheduleAt: when.toISOString() } },
       );
     }
@@ -829,7 +829,7 @@ export class FacebookPlatform extends BasePlatform {
     const data = res.data;
     if (data && typeof data === 'object' && data.error) {
       throw mapFacebookError({ status: res.status, data, text: res.text, res: res.res, url: op }, op)
-        ?? new PlatformError(`[facebook] ${op} that bai`, { platform: this.id, details: data });
+        ?? new PlatformError(`[facebook] ${op} failed`, { platform: this.id, details: data });
     }
     if (!res.ok) {
       throw mapFacebookError({ status: res.status, data, text: res.text, res: res.res, url: op }, op)
@@ -845,7 +845,7 @@ export class FacebookPlatform extends BasePlatform {
       if (app) {
         const u = JSON.parse(app);
         const peak = Math.max(Number(u.call_count) || 0, Number(u.total_time) || 0, Number(u.total_cputime) || 0);
-        if (peak >= 80) this.logger.warn('sap het quota app cua Facebook', { usage: u });
+        if (peak >= 80) this.logger.warn('the Facebook app quota is nearly used up', { usage: u });
       }
       const buc = res.headers.get('x-business-use-case-usage');
       if (buc) {
@@ -854,7 +854,7 @@ export class FacebookPlatform extends BasePlatform {
           for (const e of /** @type {any[]} */ (entries)) {
             const peak = Math.max(Number(e.call_count) || 0, Number(e.total_time) || 0, Number(e.total_cputime) || 0);
             if (peak >= 80) {
-              this.logger.warn('sap het quota Page cua Facebook', {
+              this.logger.warn('the Facebook Page quota is nearly used up', {
                 type: e.type,
                 usage: peak,
                 regainInMinutes: e.estimated_time_to_regain_access,
@@ -924,86 +924,86 @@ export function mapFacebookError(ctx, op = '') {
   // Token chet -> dung han, dung retry.
   if (code === 190) {
     const subHints = {
-      458: 'User da xoa app -> phai xin quyen lai.',
+      458: 'The user removed the app - authorization must be granted again.',
       459: 'User can dang nhap lai tai facebook.com (checkpoint).',
-      460: 'User doi mat khau -> token bi huy.',
+      460: 'The user changed their password, so the token was revoked.',
       463: 'Token het han.',
       464: 'User chua xac thuc.',
-      467: 'Token khong hop le hoac bi thu hoi.',
-      492: 'User khong con role tren Page nay.',
+      467: 'The token is invalid or was revoked.',
+      492: 'The user no longer holds a role on this Page.',
     };
-    return new AuthError(`[facebook] token khong hop le (190/${subcode}): ${message}`, {
+    return new AuthError(`[facebook] invalid token (190/${subcode}): ${message}`, {
       ...base,
       retryable: false,
-      hint: subHints[subcode] ?? 'Tao lai Page access token tu USER token dai han (GET /me/accounts).',
+      hint: subHints[subcode] ?? 'Recreate the Page access token from a long-lived USER token (GET /me/accounts).',
     });
   }
   if (code === 200 || (code >= 200 && code <= 299) || code === 10 || code === 283) {
-    return new AuthError(`[facebook] thieu quyen (${code}): ${message}`, {
+    return new AuthError(`[facebook] missing permission (${code}): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Can pages_manage_posts + pages_read_engagement + pages_show_list, va user phai co task CREATE_CONTENT tren Page.',
+      hint: 'This needs pages_manage_posts + pages_read_engagement + pages_show_list, and the user must hold the CREATE_CONTENT task on the Page.',
     });
   }
   if (code === 104) {
-    return new AuthError(`[facebook] sai appsecret_proof (104): ${message}`, {
+    return new AuthError(`[facebook] wrong appsecret_proof (104): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'App dang bat "Require App Secret" -> cau hinh `appSecret` de module tu tinh appsecret_proof.',
+      hint: 'The app has "Require App Secret" enabled - configure `appSecret` so the module can compute appsecret_proof.',
     });
   }
   if (code === 368) {
-    return new RateLimitError(`[facebook] bi chan vi bi coi la spam (368): ${message}`, {
+    return new RateLimitError(`[facebook] blocked as spam (368): ${message}`, {
       ...base,
       retryable: true,
       retryAfterMs: 30 * 60_000,
-      hint: 'Lop chong spam cua Meta. Giam tan suat dang, doi vai gio. Retry lien tuc co the bi chan Page.',
+      hint: 'This is Meta anti-spam. Post less often and wait a few hours. Retrying hard can get the Page blocked.',
     });
   }
   if (code === 80001 || code === 4 || code === 17 || code === 32 || code === 613 || code === 341) {
     const regainMin = extractRegainMinutes(res);
-    return new RateLimitError(`[facebook] vuot gioi han tan suat (${code}): ${message}`, {
+    return new RateLimitError(`[facebook] rate limit exceeded (${code}): ${message}`, {
       ...base,
       retryable: true,
       retryAfterMs: regainMin ? regainMin * 60_000 : undefined,
-      hint: 'Quota Page = 4800 x so nguoi tuong tac 24h. Page moi/it tuong tac se bi gioi han rat som.',
+      hint: 'The Page quota is 4800 x the number of engaged users in 24h, so a new or quiet Page hits the limit very early.',
     });
   }
   if (code === 506) {
-    return new PlatformError(`[facebook] noi dung trung lap (506): ${message}`, {
+    return new PlatformError(`[facebook] duplicate content (506): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Facebook tu choi bai co noi dung y het bai truoc. Them timestamp/emoji/hashtag khac nhau.',
+      hint: 'Facebook rejects a post identical to a previous one. Vary the timestamp, emoji or hashtags.',
     });
   }
   if (code === 324) {
-    return new PlatformError(`[facebook] anh khong hop le (324): ${message}`, {
+    return new PlatformError(`[facebook] invalid image (324): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Anh sai dinh dang hoac vuot 4MB (PNG: 1MB). Chuyen sang JPEG.',
+      hint: 'The image has the wrong format or is over 4MB (1MB for PNG). Convert it to JPEG.',
     });
   }
   if (code === 382) {
-    return new PlatformError(`[facebook] video qua nho (382): ${message}`, { ...base, retryable: false });
+    return new PlatformError(`[facebook] the video is too small (382): ${message}`, { ...base, retryable: false });
   }
   if (code === 389) {
-    return new PlatformError(`[facebook] khong tai duoc video tu URL (389): ${message}`, {
+    return new PlatformError(`[facebook] could not fetch the video from the URL (389): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'URL phai cong khai, khong can dang nhap, va tra ve Content-Type dung.',
+      hint: 'The URL must be public, need no sign-in, and return the right Content-Type.',
     });
   }
   if (code === 6000 || code === 6001) {
-    return new PlatformError(`[facebook] loi upload video (${code}): ${message}`, { ...base, retryable: true });
+    return new PlatformError(`[facebook] video upload error (${code}): ${message}`, { ...base, retryable: true });
   }
   if (code === 1 || code === 2) {
-    return new PlatformError(`[facebook] loi tam thoi cua Graph (${code}): ${message}`, { ...base, retryable: true });
+    return new PlatformError(`[facebook] temporary Graph error (${code}): ${message}`, { ...base, retryable: true });
   }
   if (code === 100) {
-    return new PlatformError(`[facebook] tham so khong hop le (100): ${message}`, {
+    return new PlatformError(`[facebook] invalid parameter (100): ${message}`, {
       ...base,
       retryable: false,
-      hint: 'Kiem tra ten field va encoding (vi du attached_media phai la mang {media_fbid}).',
+      hint: 'Check the field names and encoding (for example attached_media must be an array of {media_fbid}).',
     });
   }
   if (status === 429) {
@@ -1013,7 +1013,7 @@ export function mapFacebookError(ctx, op = '') {
     return new PlatformError(`[facebook] ${status}: ${message}`, { ...base, retryable: true });
   }
   if (status >= 400 || err) {
-    return new PlatformError(`[facebook] loi ${code || status}: ${message}`, {
+    return new PlatformError(`[facebook] error ${code || status}: ${message}`, {
       ...base,
       retryable: RETRYABLE_CODES.has(code),
     });

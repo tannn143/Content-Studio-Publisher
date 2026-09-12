@@ -217,8 +217,8 @@ export function configFromEnv(opts = {}) {
   const platforms = platformsFromEnv(env);
   if (requireAtLeastOne && Object.keys(platforms).length === 0) {
     throw new ConfigError(
-      'Khong tim thay cau hinh nen tang nao trong bien moi truong. Xem .env.example de biet cac bien can dat.',
-      { hint: 'Vi du toi thieu: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID' },
+      'No platform configuration was found in the environment. See .env.example for the variables to set.',
+      { hint: 'Minimal example: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID' },
     );
   }
 

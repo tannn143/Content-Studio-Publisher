@@ -93,7 +93,7 @@ export async function createAdminServer(opts = {}) {
   for (const p of stuck) {
     await workspace.updatePost(p.id, {
       status: 'failed',
-      note: 'Bi ngat giua luc dang (server khoi dong lai). Kiem tra tren nen tang truoc khi dang lai de tranh trung.',
+      note: 'Interrupted while publishing (the server restarted). Check the platform before republishing so you do not post twice.',
     });
   }
   const users = new UserService({
@@ -108,10 +108,10 @@ export async function createAdminServer(opts = {}) {
   if (firstAdmin) {
     // In mot lan duy nhat. Khong luu lai o dau - lan sau khong doc lai duoc.
     logger.warn('======================================================');
-    logger.warn('Da tao tai khoan admin dau tien cho he thong:');
+    logger.warn('Created the first administrator account for this system:');
     logger.warn(`  username: ${firstAdmin.user.username}`);
     logger.warn(`  password: ${firstAdmin.password}`);
-    logger.warn('Doi mat khau ngay sau khi dang nhap lan dau.');
+    logger.warn('Change this password right after the first sign-in.');
     logger.warn('======================================================');
   }
 
@@ -130,7 +130,7 @@ export async function createAdminServer(opts = {}) {
     try {
       url = new URL(req.url ?? '/', `http://${req.headers.host ?? `${host}:${port}`}`);
     } catch {
-      sendText(res, 400, 'URL khong hop le');
+      sendText(res, 400, 'Invalid URL');
       return;
     }
 
@@ -149,9 +149,9 @@ export async function createAdminServer(opts = {}) {
         const origin = req.headers.origin;
         if (origin && !isSameOrigin(origin, req, url)) {
           sendJson(res, 403, {
-            error: 'Request bi chan vi khac Origin (chong CSRF)',
+            error: 'Request blocked because it came from another origin (CSRF protection)',
             code: 'E_CSRF',
-            hint: 'Goi API tu chinh trang admin, hoac dung Authorization: Bearer thay vi cookie.',
+            hint: 'Call the API from the admin page itself, or use Authorization: Bearer instead of a cookie.',
           });
           return;
         }
@@ -178,7 +178,7 @@ export async function createAdminServer(opts = {}) {
 
       if (needsAuth && !authed && !isPublicPath) {
         if (url.pathname.startsWith('/api/')) {
-          sendJson(res, 401, { error: 'Can dang nhap', code: 'E_UNAUTHORIZED' });
+          sendJson(res, 401, { error: 'Sign-in required', code: 'E_UNAUTHORIZED' });
         } else {
           res.writeHead(302, { location: '/' });
           res.end();
@@ -228,15 +228,15 @@ export async function createAdminServer(opts = {}) {
         }
       }
 
-      sendJson(res, 404, { error: 'Khong tim thay', path: url.pathname });
+      sendJson(res, 404, { error: 'Not found', path: url.pathname });
     } catch (rawErr) {
       const err = /** @type {any} */ (rawErr);
       const status = err?.status ?? (err?.code === 'E_VALIDATION' || err?.code === 'E_CONFIG' ? 400 : 500);
       const wrapped = toSocialPostError(err);
       if (status >= 500) {
-        logger.error('loi server', { path: url?.pathname, error: wrapped.message });
+        logger.error('server error', { path: url?.pathname, error: wrapped.message });
       } else {
-        logger.warn('request loi', { path: url?.pathname, status, error: wrapped.message });
+        logger.warn('request failed', { path: url?.pathname, status, error: wrapped.message });
       }
       // headersSent moi cho biet da gui header chua (writableEnded thi khong).
       if (res.headersSent) {
@@ -285,9 +285,9 @@ export async function createAdminServer(opts = {}) {
       const actualPort = typeof addr === 'object' && addr ? addr.port : port;
       handle.url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`;
 
-      logger.info('admin server dang chay', { url: handle.url, auth: 'dang nhap bang tai khoan', adminToken: token ? 'co (dung cho CLI)' : 'khong' });
+      logger.info('admin server running', { url: handle.url, auth: 'sign in with an account', adminToken: token ? 'set (for CLI use)' : 'not set' });
       if (generatedToken) {
-        logger.warn('server mo ra ngoai localhost nen da tu sinh token dang nhap', { token });
+        logger.warn('server is reachable beyond localhost, so an admin token was generated', { token });
       }
       if (opts.startScheduler !== false) scheduler.start();
       return handle;
@@ -435,10 +435,10 @@ function buildRouter(deps) {
         detail: `username='${String(body.username ?? '').slice(0, 60)}'`,
         ip: ctx.ip,
       });
-      throw new HttpError(401, /** @type {any} */ (err)?.message ?? 'Dang nhap that bai');
+      throw new HttpError(401, /** @type {any} */ (err)?.message ?? 'Sign-in failed');
     }
     await users.log({ actor: result.user, action: 'auth.login', ip: ctx.ip });
-    logger.info('dang nhap', { username: result.user.username, role: result.user.role });
+    logger.info('signed in', { username: result.user.username, role: result.user.role });
 
     ctx.res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
@@ -462,10 +462,10 @@ function buildRouter(deps) {
   router.post('/api/session/password', async (ctx) => {
     const body = await readJsonBody(ctx.req);
     const me = await workspace.users.get(ctx.user.id);
-    if (!me) throw new HttpError(400, 'Tai khoan token khong doi duoc mat khau');
+    if (!me) throw new HttpError(400, 'The bearer-token account has no password to change');
     const { verifyPassword } = await import('../auth/users.js');
     if (!verifyPassword(String(body.currentPassword ?? ''), me)) {
-      throw new HttpError(401, 'Mat khau hien tai khong dung');
+      throw new HttpError(401, 'Current password is incorrect');
     }
     await users.setPassword(me.id, String(body.newPassword ?? ''));
     await users.log({ actor: me, action: 'auth.password_change', ip: ctx.ip });
@@ -481,13 +481,13 @@ function buildRouter(deps) {
 
   /** Chan route chi danh cho admin. */
   const requireAdmin = (ctx) => {
-    if (!isAdmin(ctx.user)) throw new HttpError(403, 'Chi admin lam duoc viec nay');
+    if (!isAdmin(ctx.user)) throw new HttpError(403, 'Only an administrator can do this');
   };
 
   /** Chan truy cap mot kenh chua duoc cap quyen. */
   const requireChannel = (ctx, channelId) => {
     if (!canUseChannel(ctx.user, channelId)) {
-      throw new HttpError(403, 'Tai khoan nay khong duoc cap quyen tren kenh do');
+      throw new HttpError(403, 'This account has not been granted access to that channel');
     }
   };
 
@@ -506,7 +506,7 @@ function buildRouter(deps) {
       actor: ctx.user, action: 'user.create', targetUserId: created.id,
       detail: `username='${created.username}' role=${created.role}`, ip: ctx.ip,
     });
-    logger.info('tao nguoi dung', { username: created.username, role: created.role });
+    logger.info('user created', { username: created.username, role: created.role });
     return { user: publicUser(created), password };
   });
 
@@ -534,9 +534,9 @@ function buildRouter(deps) {
 
   router.delete('/api/users/:id', async (ctx) => {
     requireAdmin(ctx);
-    if (ctx.params.id === ctx.user.id) throw new HttpError(400, 'Khong the tu xoa chinh minh');
+    if (ctx.params.id === ctx.user.id) throw new HttpError(400, 'You cannot remove your own account');
     const ok = await users.removeUser(ctx.params.id);
-    if (!ok) throw new HttpError(404, 'Khong tim thay nguoi dung');
+    if (!ok) throw new HttpError(404, 'User not found');
     await users.log({ actor: ctx.user, action: 'user.delete', targetUserId: ctx.params.id, ip: ctx.ip });
     return { ok: true };
   });
@@ -608,7 +608,7 @@ function buildRouter(deps) {
     requireAdmin(ctx);
     const body = await readJsonBody(ctx.req);
     const channel = await workspace.channels.get(ctx.params.id);
-    if (!channel) throw new HttpError(404, 'Khong tim thay kenh');
+    if (!channel) throw new HttpError(404, 'Channel not found');
 
     /** @type {Record<string, any>} */
     const patch = {};
@@ -626,7 +626,7 @@ function buildRouter(deps) {
       if (Object.keys(cfg).length > 0) patch.config = { ...channel.config, ...cfg };
     }
     const updated = await workspace.channels.update(ctx.params.id, patch);
-    logger.info('cap nhat kenh', { channelId: ctx.params.id, fields: Object.keys(patch) });
+    logger.info('channel updated', { channelId: ctx.params.id, fields: Object.keys(patch) });
     return { channel: publicChannel(/** @type {any} */ (updated)) };
   });
 
@@ -634,14 +634,14 @@ function buildRouter(deps) {
     requireAdmin(ctx);
     const channel = await workspace.channels.get(ctx.params.id);
     const ok = await workspace.channels.remove(ctx.params.id);
-    if (!ok) throw new HttpError(404, 'Khong tim thay kenh');
+    if (!ok) throw new HttpError(404, 'Channel not found');
     // Kenh khong con -> bo khoi quyen cua moi nguoi, khong de lai quyen treo.
     await users.dropChannelFromAllUsers(ctx.params.id);
     await users.log({
       actor: ctx.user, action: 'channel.disconnect', channelId: ctx.params.id,
       detail: channel ? `${channel.platform}: ${channel.name}` : undefined, ip: ctx.ip,
     });
-    logger.info('da ngat ket noi kenh', { channelId: ctx.params.id });
+    logger.info('channel disconnected', { channelId: ctx.params.id });
     events.emit('channels:changed', { removed: ctx.params.id });
     return { ok: true };
   });
@@ -657,7 +657,7 @@ function buildRouter(deps) {
   router.post('/api/channels/:id/verify', async (ctx) => {
     requireChannel(ctx, ctx.params.id);
     const results = await publisher.verifyChannels(ctx.params.id);
-    return { result: results[ctx.params.id] ?? { ok: false, error: 'Khong tim thay kenh' } };
+    return { result: results[ctx.params.id] ?? { ok: false, error: 'Channel not found' } };
   });
 
   /**
@@ -670,7 +670,7 @@ function buildRouter(deps) {
       return { creatorInfo: await publisher.getCreatorInfo(ctx.params.id) };
     } catch (err) {
       const e = /** @type {any} */ (err);
-      throw new HttpError(400, e?.message ?? 'Khong lay duoc creator_info', { code: e?.code, hint: e?.hint });
+      throw new HttpError(400, e?.message ?? 'Could not load creator_info', { code: e?.code, hint: e?.hint });
     }
   });
 
@@ -684,7 +684,7 @@ function buildRouter(deps) {
       actor: ctx.user, action: 'channel.connect', channelId: channel.id,
       detail: `telegram: ${channel.name}`, ip: ctx.ip,
     });
-    logger.info('da ket noi kenh Telegram', { name: channel.name });
+    logger.info('Telegram channel connected', { name: channel.name });
     events.emit('channels:changed', { added: channel.id });
     return { channel: publicChannel(channel) };
   });
@@ -701,7 +701,7 @@ function buildRouter(deps) {
       returnTo: '/#channels',
       actor: { id: ctx.user.id, username: ctx.user.username },
     });
-    logger.info('bat dau ket noi OAuth', { provider });
+    logger.info('starting OAuth connection', { provider });
     return { url };
   });
 
@@ -711,10 +711,10 @@ function buildRouter(deps) {
     const error = ctx.query.get('error') ?? ctx.query.get('error_description');
 
     if (error) {
-      return redirectWithMessage(ctx.res, 'error', `Nen tang tu choi: ${error}`);
+      return redirectWithMessage(ctx.res, 'error', `The platform refused: ${error}`);
     }
     if (!code || !state) {
-      return redirectWithMessage(ctx.res, 'error', 'Callback thieu code hoac state');
+      return redirectWithMessage(ctx.res, 'error', 'The callback is missing code or state');
     }
 
     try {
@@ -733,12 +733,12 @@ function buildRouter(deps) {
           ip: ctx.ip,
         });
       }
-      logger.info('da ket noi kenh qua OAuth', { provider: result.provider, channels: names });
+      logger.info('channels connected via OAuth', { provider: result.provider, channels: names });
       events.emit('channels:changed', { provider: result.provider, count: names.length });
       return redirectWithMessage(ctx.res, 'success', `Da ket noi ${names.length} kenh: ${names.join(', ')}`);
     } catch (rawErr) {
       const err = toSocialPostError(rawErr);
-      logger.error('ket noi OAuth that bai', { error: err.message });
+      logger.error('OAuth connection failed', { error: err.message });
       return redirectWithMessage(ctx.res, 'error', `${err.message}${err.hint ? ` - ${err.hint}` : ''}`);
     }
   });
@@ -773,7 +773,7 @@ function buildRouter(deps) {
     const size = await pipeBodyToFile(ctx.req, storedPath, MAX_UPLOAD_BYTES);
     if (size === 0) {
       await unlink(storedPath).catch(() => {});
-      throw new HttpError(400, 'File rong');
+      throw new HttpError(400, 'The file is empty');
     }
 
     // Nhan dang mime bang magic bytes + lay duration/kich thuoc neu co ffprobe.
@@ -782,11 +782,11 @@ function buildRouter(deps) {
       await media.load();
     } catch (err) {
       await unlink(storedPath).catch(() => {});
-      throw new HttpError(400, `Khong doc duoc file: ${/** @type {Error} */ (err).message}`);
+      throw new HttpError(400, `Could not read the file: ${/** @type {Error} */ (err).message}`);
     }
     if (media.kind !== 'image' && media.kind !== 'video') {
       await unlink(storedPath).catch(() => {});
-      throw new HttpError(400, `Chi ho tro anh va video (file nay la ${media.mime})`);
+      throw new HttpError(400, `Only images and video are supported (this file is ${media.mime})`);
     }
     await media.probeWithFfprobe().catch(() => null);
 
@@ -800,13 +800,13 @@ function buildRouter(deps) {
       height: media.height,
       durationSec: media.durationSec,
     });
-    logger.info('da upload media', { filename, size, mime: media.mime, kind: media.kind });
+    logger.info('media uploaded', { filename, size, mime: media.mime, kind: media.kind });
     return { media: publicMedia(rec) };
   });
 
   router.get('/api/media/:id/file', async (ctx) => {
     const rec = await workspace.media.get(ctx.params.id);
-    if (!rec) throw new HttpError(404, 'Khong tim thay media');
+    if (!rec) throw new HttpError(404, 'Media not found');
     // Content-Type lay tu mime DA SNIFF bang magic bytes (khong phai tu client),
     // kem CSP + nosniff de mot file do nguoi dung tai len khong the chay script
     // tren origin cua admin.
@@ -823,7 +823,7 @@ function buildRouter(deps) {
 
   router.delete('/api/media/:id', async (ctx) => {
     const ok = await workspace.removeMedia(ctx.params.id);
-    if (!ok) throw new HttpError(404, 'Khong tim thay media');
+    if (!ok) throw new HttpError(404, 'Media not found');
     return { ok: true };
   });
 
@@ -840,21 +840,21 @@ function buildRouter(deps) {
     const body = await readJsonBody(ctx.req);
     const draft = await validatePostBody(body, workspace);
     const post = await workspace.createPost(draft);
-    logger.info('da tao bai dang', { postId: post.id, status: post.status, channels: post.channelIds.length });
+    logger.info('post created', { postId: post.id, status: post.status, channels: post.channelIds.length });
     events.emit('posts:changed', { added: post.id });
     return { post };
   });
 
   router.get('/api/posts/:id', async (ctx) => {
     const post = await workspace.posts.get(ctx.params.id);
-    if (!post) throw new HttpError(404, 'Khong tim thay bai dang');
+    if (!post) throw new HttpError(404, 'Post not found');
     return { post };
   });
 
   router.patch('/api/posts/:id', async (ctx) => {
     const existing = await workspace.posts.get(ctx.params.id);
-    if (!existing) throw new HttpError(404, 'Khong tim thay bai dang');
-    if (existing.status === 'publishing') throw new HttpError(409, 'Bai dang dang duoc gui, khong sua duoc');
+    if (!existing) throw new HttpError(404, 'Post not found');
+    if (existing.status === 'publishing') throw new HttpError(409, 'This post is being published and cannot be edited');
 
     const body = await readJsonBody(ctx.req);
     const draft = await validatePostBody({ ...toBody(existing), ...body }, workspace);
@@ -873,14 +873,14 @@ function buildRouter(deps) {
 
   router.delete('/api/posts/:id', async (ctx) => {
     const ok = await workspace.posts.remove(ctx.params.id);
-    if (!ok) throw new HttpError(404, 'Khong tim thay bai dang');
+    if (!ok) throw new HttpError(404, 'Post not found');
     events.emit('posts:changed', { removed: ctx.params.id });
     return { ok: true };
   });
 
   router.post('/api/posts/:id/publish', async (ctx) => {
     const target = await workspace.posts.get(ctx.params.id);
-    if (!target) throw new HttpError(404, 'Khong tim thay bai dang');
+    if (!target) throw new HttpError(404, 'Post not found');
 
     // Rao chan that: khong dua vao UI. Kiem tra tung kenh trong bai.
     const allowed = assertCanPublishPost(ctx.user, target.channelIds ?? []);
@@ -893,13 +893,13 @@ function buildRouter(deps) {
     }
     const body = await readJsonBody(ctx.req).catch(() => ({}));
     const existing = await workspace.posts.get(ctx.params.id);
-    if (!existing) throw new HttpError(404, 'Khong tim thay bai dang');
+    if (!existing) throw new HttpError(404, 'Post not found');
     if (existing.status === 'publishing') {
-      throw new HttpError(409, 'Bai dang nay dang duoc gui, cho xong da');
+      throw new HttpError(409, 'This post is already being published — wait for it to finish');
     }
     // Chong dang TRUNG: bai da dang thanh cong thi phai nhan ban roi dang lai.
     if (existing.status === 'posted' && !body.dryRun && !body.force) {
-      throw new HttpError(409, 'Bai nay da dang thanh cong roi. Dung "Nhan ban" neu muon dang lai.');
+      throw new HttpError(409, 'This post was already published. Use "Duplicate" if you want to publish it again.');
     }
     const { post, report } = await publisher.publishPost(ctx.params.id, { dryRun: Boolean(body.dryRun) });
 
@@ -923,7 +923,7 @@ function buildRouter(deps) {
 
   router.post('/api/posts/:id/duplicate', async (ctx) => {
     const src = await workspace.posts.get(ctx.params.id);
-    if (!src) throw new HttpError(404, 'Khong tim thay bai dang');
+    if (!src) throw new HttpError(404, 'Post not found');
     const post = await workspace.createPost({
       content: { ...src.content },
       mediaIds: [...src.mediaIds],
@@ -1055,7 +1055,7 @@ function buildRouter(deps) {
     }
 
     const settings = await workspace.settings.merge(patch);
-    logger.info('da cap nhat cai dat', { fields: Object.keys(patch) });
+    logger.info('settings updated', { fields: Object.keys(patch) });
     return { settings: redactSettings(settings) };
   });
 
@@ -1090,40 +1090,40 @@ async function validatePostBody(body, workspace) {
   const hashtags = normalizeHashtags(body.hashtags ?? body.content?.hashtags);
   const link = body.link ?? body.content?.link;
   if (link && !/^https?:\/\//i.test(String(link))) {
-    throw new HttpError(400, 'link phai bat dau bang http:// hoac https://');
+    throw new HttpError(400, 'The link must start with http:// or https://');
   }
 
   const mediaIds = Array.isArray(body.mediaIds) ? body.mediaIds.map(String) : [];
   if (mediaIds.length > 0) {
     const found = await workspace.getMediaList(mediaIds);
-    if (found.length !== mediaIds.length) throw new HttpError(400, 'Co media khong ton tai');
+    if (found.length !== mediaIds.length) throw new HttpError(400, 'Some of the selected media no longer exists');
   }
 
   const channelIds = Array.isArray(body.channelIds) ? body.channelIds.map(String) : [];
   if (channelIds.length > 0) {
     const found = await workspace.getChannels(channelIds);
-    if (found.length !== channelIds.length) throw new HttpError(400, 'Co kenh khong ton tai');
+    if (found.length !== channelIds.length) throw new HttpError(400, 'Some of the selected accounts no longer exist');
   }
 
   if (!title && !description && mediaIds.length === 0) {
-    throw new HttpError(400, 'Bai dang rong: can it nhat tieu de, noi dung hoac media');
+    throw new HttpError(400, 'The post is empty: it needs at least a title, a description or media');
   }
 
   /** @type {string | null} */
   let scheduledAt = null;
   if (body.scheduledAt) {
     const d = new Date(body.scheduledAt);
-    if (Number.isNaN(d.getTime())) throw new HttpError(400, 'scheduledAt khong hop le');
+    if (Number.isNaN(d.getTime())) throw new HttpError(400, 'scheduledAt is not a valid date');
     scheduledAt = d.toISOString();
   }
 
   const ALLOWED_STATUS = ['draft', 'queued', 'posted', 'partial', 'failed', 'cancelled'];
   if (body.status !== undefined && !ALLOWED_STATUS.includes(body.status)) {
-    throw new HttpError(400, `status khong hop le. Cho phep: ${ALLOWED_STATUS.join(', ')}`);
+    throw new HttpError(400, `Invalid status. Allowed: ${ALLOWED_STATUS.join(', ')}`);
   }
   const status = body.status ?? (scheduledAt ? 'queued' : 'draft');
   if (status === 'queued' && channelIds.length === 0) {
-    throw new HttpError(400, 'Can chon it nhat mot kenh truoc khi len lich');
+    throw new HttpError(400, 'Select at least one account before scheduling');
   }
 
   /** @type {Record<string, any>} */
@@ -1174,13 +1174,13 @@ function checkMediaAgainstPlatform(platform, caps, mediaRecords, content) {
   const videos = mediaRecords.filter((m) => m.kind === 'video');
 
   if (mediaRecords.length === 0 && !caps.text) {
-    issues.push({ level: 'error', message: `${platform} khong dang duoc bai chi co chu` });
+    issues.push({ level: 'error', message: `${platform} cannot post text only` });
   }
   if (videos.length > 0 && !caps.video) {
-    issues.push({ level: 'error', message: `${platform} khong ho tro video` });
+    issues.push({ level: 'error', message: `${platform} does not support video` });
   }
   if (videos.length === 0 && images.length > 0 && !caps.image) {
-    issues.push({ level: 'error', message: `${platform} khong ho tro anh` });
+    issues.push({ level: 'error', message: `${platform} does not support images` });
   }
   if (mediaRecords.length > caps.maxMediaCount && !caps.album) {
     issues.push({ level: 'error', message: `${platform} chi nhan ${caps.maxMediaCount} media/bai` });
@@ -1192,14 +1192,14 @@ function checkMediaAgainstPlatform(platform, caps, mediaRecords, content) {
   for (const m of mediaRecords) {
     const allowed = m.kind === 'image' ? caps.imageMime : caps.videoMime;
     if (allowed && !allowed.includes(m.mime)) {
-      issues.push({ level: 'error', message: `${m.filename}: ${platform} khong nhan ${m.mime} (can ${allowed.join(', ')})` });
+      issues.push({ level: 'error', message: `${m.filename}: ${platform} does not accept ${m.mime} (needs ${allowed.join(', ')})` });
     }
     const maxBytes = m.kind === 'image' ? caps.maxImageBytes : caps.maxVideoBytes;
     if (maxBytes && m.size > maxBytes) {
-      issues.push({ level: 'error', message: `${m.filename}: ${Math.round(m.size / 1e6)}MB vuot gioi han ${Math.round(maxBytes / 1e6)}MB cua ${platform}` });
+      issues.push({ level: 'error', message: `${m.filename}: ${Math.round(m.size / 1e6)}MB is over the ${Math.round(maxBytes / 1e6)}MB limit for ${platform}` });
     }
     if (m.kind === 'video' && caps.maxVideoSec && m.durationSec && m.durationSec > caps.maxVideoSec) {
-      issues.push({ level: 'error', message: `${m.filename}: ${Math.round(m.durationSec)}s vuot gioi han ${caps.maxVideoSec}s` });
+      issues.push({ level: 'error', message: `${m.filename}: ${Math.round(m.durationSec)}s is over the ${caps.maxVideoSec}s limit` });
     }
     // Canh bao rieng cho anh feed Instagram.
     if (platform === 'instagram' && m.kind === 'image' && m.width && m.height) {

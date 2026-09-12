@@ -27,7 +27,7 @@ export class LocalTunnelMediaHost {
   constructor(opts) {
     if (!opts?.publicBaseUrl) {
       throw new ConfigError(
-        'LocalTunnelMediaHost: thieu `publicBaseUrl`. Hay chay cloudflared/ngrok roi truyen URL cong khai vao.',
+        'LocalTunnelMediaHost: `publicBaseUrl` is missing. Run cloudflared/ngrok and pass the public URL in.',
       );
     }
     this.name = 'local-tunnel';

@@ -140,17 +140,17 @@ export class HttpClient {
       cleanup();
       // Caller huy -> AbortError (KHONG retry). Timeout cua ta -> TimeoutError (retry duoc).
       if (signal?.aborted) {
-        throw new AbortError(`Da huy: ${method} ${stripSecrets(finalUrl)}`, { platform, cause: err });
+        throw new AbortError(`Aborted: ${method} ${stripSecrets(finalUrl)}`, { platform, cause: err });
       }
       if (mergedSignal.aborted) {
-        throw new TimeoutError(`Request qua ${timeoutMs}ms: ${method} ${stripSecrets(finalUrl)}`, {
+        throw new TimeoutError(`Request exceeded ${timeoutMs}ms: ${method} ${stripSecrets(finalUrl)}`, {
           platform,
           cause: err,
         });
       }
       const e = toSocialPostError(err, { platform });
       if (e instanceof NetworkError || e.retryable) throw e;
-      throw new NetworkError(`Loi mang khi goi ${method} ${stripSecrets(finalUrl)}: ${e.message}`, {
+      throw new NetworkError(`Network error calling ${method} ${stripSecrets(finalUrl)}: ${e.message}`, {
         platform,
         cause: err,
       });
@@ -361,13 +361,13 @@ export function defaultMapError(ctx) {
   if (status === 401) {
     return new AuthError(`HTTP 401 Unauthorized: ${snippet}`, {
       ...base,
-      hint: 'Access token het han hoac sai. Kiem tra refresh token / quyen truy cap.',
+      hint: 'The access token has expired or is wrong. Check the refresh token and the granted permissions.',
     });
   }
   if (status === 403) {
     return new AuthError(`HTTP 403 Forbidden: ${snippet}`, {
       ...base,
-      hint: 'Thieu scope/permission, hoac tai khoan chua duoc phep dang bai.',
+      hint: 'A scope or permission is missing, or the account is not allowed to post.',
     });
   }
   if (status === 429) {
@@ -380,7 +380,7 @@ export function defaultMapError(ctx) {
     return new TimeoutError(`HTTP 408 Request Timeout: ${snippet}`, base);
   }
   if (status >= 500) {
-    return new PlatformError(`HTTP ${status} tu nen tang: ${snippet}`, { ...base, retryable: true });
+    return new PlatformError(`HTTP ${status} from the platform: ${snippet}`, { ...base, retryable: true });
   }
   return new PlatformError(`HTTP ${status}: ${snippet}`, { ...base, retryable: false });
 }

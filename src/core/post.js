@@ -128,7 +128,7 @@ export class Post {
  */
 export async function normalizePost(input, opts = {}) {
   if (!input || typeof input !== 'object') {
-    throw new ValidationError('Input bai dang phai la object', {
+    throw new ValidationError('Post input must be an object', {
       issues: [{ path: '', message: 'expected object' }],
     });
   }
@@ -140,29 +140,29 @@ export async function normalizePost(input, opts = {}) {
   const description = sanitizeText(input.description ?? '');
 
   if (input.title != null && typeof input.title !== 'string') {
-    issues.push({ path: 'title', message: 'title phai la string' });
+    issues.push({ path: 'title', message: 'title must be a string' });
   }
   if (input.description != null && typeof input.description !== 'string') {
-    issues.push({ path: 'description', message: 'description phai la string' });
+    issues.push({ path: 'description', message: 'description must be a string' });
   }
   if (input.link != null && typeof input.link !== 'string') {
-    issues.push({ path: 'link', message: 'link phai la string' });
+    issues.push({ path: 'link', message: 'link must be a string' });
   }
   if (input.link && !/^https?:\/\//i.test(input.link)) {
-    issues.push({ path: 'link', message: 'link phai bat dau bang http:// hoac https://' });
+    issues.push({ path: 'link', message: 'link must start with http:// or https://' });
   }
   if (input.platforms != null && !Array.isArray(input.platforms)) {
-    issues.push({ path: 'platforms', message: 'platforms phai la mang string' });
+    issues.push({ path: 'platforms', message: 'platforms must be an array of strings' });
   }
   if (input.overrides != null && (typeof input.overrides !== 'object' || Array.isArray(input.overrides))) {
-    issues.push({ path: 'overrides', message: 'overrides phai la object { platformId: {...} }' });
+    issues.push({ path: 'overrides', message: 'overrides must be an object { platformId: {...} }' });
   }
 
   let scheduleAt = null;
   if (input.scheduleAt != null) {
     const d = input.scheduleAt instanceof Date ? input.scheduleAt : new Date(input.scheduleAt);
     if (Number.isNaN(d.getTime())) {
-      issues.push({ path: 'scheduleAt', message: 'scheduleAt khong phai thoi diem hop le' });
+      issues.push({ path: 'scheduleAt', message: 'scheduleAt is not a valid date' });
     } else {
       scheduleAt = d;
     }
@@ -171,26 +171,26 @@ export async function normalizePost(input, opts = {}) {
   const hashtags = normalizeHashtags(input.hashtags);
 
   if (issues.length > 0) {
-    throw new ValidationError(`Input bai dang khong hop le: ${issues.map((i) => `${i.path} - ${i.message}`).join('; ')}`, { issues });
+    throw new ValidationError(`Invalid post input: ${issues.map((i) => `${i.path} - ${i.message}`).join('; ')}`, { issues });
   }
 
   let media = [];
   try {
     media = await normalizeMediaList(input.media, { signal: opts.signal });
   } catch (err) {
-    throw new ValidationError(`Media khong hop le: ${/** @type {Error} */ (err).message}`, {
+    throw new ValidationError(`Invalid media: ${/** @type {Error} */ (err).message}`, {
       cause: err,
       issues: [{ path: 'media', message: /** @type {Error} */ (err).message }],
     });
   }
 
   if (!title && !description && media.length === 0) {
-    throw new ValidationError('Bai dang rong: can it nhat title, description hoac media', {
+    throw new ValidationError('The post is empty: it needs at least a title, a description or media', {
       issues: [{ path: '', message: 'empty post' }],
     });
   }
   if (opts.requireMedia && media.length === 0) {
-    throw new ValidationError('Bai dang nay bat buoc phai co media', {
+    throw new ValidationError('This post requires media', {
       issues: [{ path: 'media', message: 'required' }],
     });
   }

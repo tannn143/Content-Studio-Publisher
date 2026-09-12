@@ -118,7 +118,7 @@ export class BasePlatform {
     });
     if (missing.length > 0) {
       throw new ConfigError(
-        `[${this.id}] thieu cau hinh: ${missing.join(', ')}`,
+        `[${this.id}] missing configuration: ${missing.join(', ')}`,
         { platform: this.id, hint: opts.hint, details: { missing } },
       );
     }
@@ -147,19 +147,19 @@ export class BasePlatform {
   supports(post) {
     const cap = this.capabilities;
     if (post.isTextOnly && !cap.text) {
-      return { ok: false, reason: `${this.displayName} khong dang duoc bai chi co chu (can it nhat 1 anh/video)` };
+      return { ok: false, reason: `${this.displayName} cannot post text only (at least one image or video is required)` };
     }
     if (post.videos.length > 0 && !cap.video) {
-      return { ok: false, reason: `${this.displayName} khong ho tro video` };
+      return { ok: false, reason: `${this.displayName} does not support video` };
     }
     if (post.videos.length === 0 && post.images.length > 0 && !cap.image) {
-      return { ok: false, reason: `${this.displayName} khong ho tro anh` };
+      return { ok: false, reason: `${this.displayName} does not support images` };
     }
     if (post.media.length > cap.maxMediaCount && !cap.album) {
-      return { ok: false, reason: `${this.displayName} chi nhan toi da ${cap.maxMediaCount} media moi bai` };
+      return { ok: false, reason: `${this.displayName} accepts at most ${cap.maxMediaCount} media per post` };
     }
     if (post.scheduleAt && !cap.supportsSchedule) {
-      return { ok: false, reason: `${this.displayName} khong ho tro hen gio qua API` };
+      return { ok: false, reason: `${this.displayName} has no native scheduling through the API` };
     }
     return { ok: true };
   }
@@ -191,7 +191,7 @@ export class BasePlatform {
 
     if (this.dryRun) {
       const preview = await this.dryRunPreview(post, options);
-      this.logger.info('dry-run: khong goi API', { preview: preview.summary });
+      this.logger.info('dry run: no API call made', { preview: preview.summary });
       return {
         platform: this.id,
         ok: true,
@@ -218,7 +218,7 @@ export class BasePlatform {
    */
   // eslint-disable-next-line no-unused-vars
   async doPublish(post, options) {
-    throw new Error(`${this.id}: chua cai dat doPublish()`);
+    throw new Error(`${this.id}: doPublish() is not implemented`);
   }
 
   /**
@@ -294,7 +294,7 @@ export class BasePlatform {
       try {
         await fn();
       } catch (err) {
-        this.logger.warn('cleanup that bai', { error: String(err) });
+        this.logger.warn('cleanup failed', { error: String(err) });
       }
     }
   }
@@ -316,20 +316,20 @@ export class BasePlatform {
     const allowed = isImage ? cap.imageMime : cap.videoMime;
     if (allowed && media.mime && !allowed.includes(media.mime)) {
       throw new UnsupportedError(
-        `[${this.id}] khong ho tro dinh dang ${media.mime}. Cho phep: ${allowed.join(', ')}`,
+        `[${this.id}] does not support ${media.mime}. Allowed: ${allowed.join(', ')}`,
         { platform: this.id, details: { mime: media.mime, allowed } },
       );
     }
     const maxBytes = isImage ? cap.maxImageBytes : cap.maxVideoBytes;
     if (maxBytes && media.size && media.size > maxBytes) {
       throw new UnsupportedError(
-        `[${this.id}] media ${Math.round(media.size / 1e6)}MB vuot gioi han ${Math.round(maxBytes / 1e6)}MB`,
+        `[${this.id}] media is ${Math.round(media.size / 1e6)}MB, over the ${Math.round(maxBytes / 1e6)}MB limit`,
         { platform: this.id, details: { size: media.size, maxBytes } },
       );
     }
     if (!isImage && cap.maxVideoSec && media.durationSec && media.durationSec > cap.maxVideoSec) {
       throw new UnsupportedError(
-        `[${this.id}] video ${Math.round(media.durationSec)}s vuot gioi han ${cap.maxVideoSec}s`,
+        `[${this.id}] video is ${Math.round(media.durationSec)}s, over the ${cap.maxVideoSec}s limit`,
         { platform: this.id, details: { durationSec: media.durationSec, maxVideoSec: cap.maxVideoSec } },
       );
     }

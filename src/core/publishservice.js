@@ -65,7 +65,7 @@ export class PublishService {
       if (!(await this.workspace.mediaExists(m))) missing.push(m.filename);
     }
     if (missing.length > 0) {
-      throw new Error(`Thieu file media tren dia: ${missing.join(', ')}`);
+      throw new Error(`Media files missing from disk: ${missing.join(', ')}`);
     }
 
     const media = mediaRecords.map((m) => ({
@@ -112,12 +112,12 @@ export class PublishService {
    */
   async publishPost(postId, opts = {}) {
     const record = await this.workspace.posts.get(postId);
-    if (!record) throw new Error(`Khong tim thay bai dang '${postId}'`);
+    if (!record) throw new Error(`Post '${postId}' not found`);
 
     const channels = await this.workspace.getChannels(record.channelIds);
     const usable = channels.filter((c) => c.enabled);
     if (usable.length === 0) {
-      const err = 'Bai dang khong co kenh nao dang bat';
+      const err = 'This post has no enabled account';
       await this.workspace.updatePost(postId, { status: 'failed', note: err });
       throw new Error(err);
     }
@@ -184,7 +184,7 @@ export class PublishService {
         await this.workspace.setChannelError(channelId, null);
       } else if (!r.skipped) {
         await this.workspace.setChannelError(channelId, {
-          message: r.error?.message ?? 'loi khong ro',
+          message: r.error?.message ?? 'unknown error',
           code: r.error?.code,
         });
       }
@@ -202,7 +202,7 @@ export class PublishService {
       status,
       report: slimReport(report),
       publishedAt: opts.dryRun ? record.publishedAt : new Date().toISOString(),
-      note: failCount > 0 ? `That bai o: ${report.failed.join(', ')}` : undefined,
+      note: failCount > 0 ? `Failed on: ${report.failed.join(', ')}` : undefined,
     });
 
     this.events.emit('post:done', {
@@ -231,9 +231,9 @@ export class PublishService {
   async getCreatorInfo(channelId) {
     const all = await this.workspace.listChannels();
     const channel = all.find((c) => c.id === channelId);
-    if (!channel) throw new Error(`Khong tim thay kenh '${channelId}'`);
+    if (!channel) throw new Error(`Channel '${channelId}' not found`);
     if (channel.platform !== 'tiktok') {
-      throw new Error(`Kenh '${channelId}' khong phai TikTok - khong co creator_info`);
+      throw new Error(`Channel '${channelId}' is not a TikTok account, so it has no creator_info`);
     }
 
     const poster = new SocialPoster({
@@ -287,7 +287,7 @@ export class PublishService {
         }
       } else {
         await this.workspace.setChannelError(id, {
-          message: String(/** @type {any} */ (res).error?.message ?? /** @type {any} */ (res).error ?? 'loi'),
+          message: String(/** @type {any} */ (res).error?.message ?? /** @type {any} */ (res).error ?? 'error'),
           code: /** @type {any} */ (res).code,
         });
       }
