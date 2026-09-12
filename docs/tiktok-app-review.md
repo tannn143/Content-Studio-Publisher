@@ -1,291 +1,395 @@
-# TikTok App Review — submission copy
+# TikTok App Review & Audit — submission copy
 
-Bản tiếng Anh để dán thẳng vào form đăng ký app (Desktop) trên
-developers.tiktok.com. Mỗi mục ghi rõ dán vào ô nào.
+Kịch bản: **công cụ nội bộ của một công ty**. Trưởng bộ phận marketing kết nối
+các kênh TikTok *của công ty* một lần, rồi cấp quyền cho từng nhân viên đăng bài
+qua hệ thống — nhân viên không bao giờ nhận mật khẩu tài khoản TikTok.
 
-Trạng thái: UI đã đáp ứng đủ yêu cầu UX bắt buộc cho Direct Post, đã có Terms of
-Service và Privacy Policy. Xem [checklist trước khi nộp](#8-checklist-trước-khi-nộp).
+Bản tiếng Anh để dán thẳng vào form trên developers.tiktok.com. Mỗi mục ghi rõ
+dán vào ô nào.
 
----
-
-## 1. App name
-
-> **Wallpaper Studio Publisher**
-
-Đừng nộp dưới tên `wallpaper-auto-marketing`. Cụm "auto marketing" là cờ đỏ với
-reviewer chống spam: "auto" + "marketing" đọc như công cụ đăng hàng loạt. Tên
-trên TikTok Developer không cần trùng tên repo.
-
-Tên hiển thị trong web admin (tiêu đề tab, màn hình đăng nhập, sidebar) đã đổi
-sang **Wallpaper Studio Publisher** — reviewer xem video demo sẽ thấy đúng tên
-đã đăng ký. Tên package npm giữ nguyên `wallpaper-auto-marketing` vì đổi sẽ phá
-mọi câu `import` trong tài liệu; reviewer không nhìn tới đó.
+> Mọi thứ mô tả dưới đây **đã có trong app**. Việc còn lại ở [mục 10](#10-checklist).
 
 ---
 
-## 2. App description (ô "Description", ~500–1000 ký tự)
+## 1. Vì sao kịch bản này thuyết phục
 
-Wallpaper Studio Publisher is a desktop publishing tool for independent
-wallpaper artists and small design studios. It runs locally on the creator's
-own computer — there is no hosted backend and no shared account pool.
+Hai điều TikTok muốn thấy, kịch bản này đáp ứng tự nhiên:
 
-The creator writes one post by hand (title, caption, hashtags) and attaches
-their own original artwork or a video they produced. The app then publishes
-that single post to the creator's own connected channels — TikTok, YouTube,
-Instagram, Facebook and Telegram — so the creator does not have to retype and
-re-upload the same piece of work five times.
+**Có pháp nhân chịu trách nhiệm.** Không phải cá nhân ẩn danh chạy script, mà
+một công ty đăng lên kênh của chính mình, nhân viên có hợp đồng, có người quản
+lý. Khi có vấn đề, TikTok biết hỏi ai.
 
-Each installation is used by one creator, who connects only their own TikTok
-account through OAuth. Access tokens are stored in a file on that creator's
-machine and are never sent to us or to any third party. The app has no
-follow, like, comment, view or DM automation, and no way to post to an account
-the operator does not personally own.
+**Tích hợp API là cách *an toàn hơn*, không phải cách *nhanh hơn*.** Lý do dùng
+API ở đây là bảo mật: không phát mật khẩu tài khoản TikTok cho 5–10 nhân viên.
+Đây là lập luận mạnh nhất bạn có — nó cho thấy API giúp *giảm* rủi ro thay vì
+giúp tăng sản lượng bài đăng.
 
-Typical use: an artist finishes a 4K wallpaper set, records a short
-walkthrough video, writes a caption, and publishes it once to their own
-channels — a few posts per week.
+**Điểm cần nói rõ:** TikTok để ý các hệ thống đăng bài thay cho tài khoản của
+bên thứ ba (dịch vụ đăng bài, agency bán lại quyền truy cập). Về kỹ thuật thì
+app nào đã audit và được authorize đều đăng được — đây là chuyện cam kết trong
+đơn, không phải rào kỹ thuật. Nên mọi nội dung dưới đây đều nói rõ: **một công
+ty, kênh do công ty sở hữu, nhân viên nội bộ, không có khách hàng bên ngoài,
+không bán lại.** Đừng bỏ câu nào trong số đó.
 
 ---
 
-## 3. Scope justifications (ô "Reason for requesting" từng scope)
+## 2. App name
+
+> **Content Studio Publisher**
+
+Đừng nộp dưới tên có chữ "auto", "marketing automation", "bot", "mass" hay
+"scheduler" — với reviewer chống spam, "auto marketing" đọc như công cụ đăng
+hàng loạt.
+
+Phần **Platform** chọn **Web** (hệ thống nội bộ chạy trên hạ tầng công ty).
+
+---
+
+## 3. App description (ô "Description")
+
+Content Studio Publisher is an internal publishing tool used by one company —
+ours — to post to the company's own TikTok accounts.
+
+Our marketing department manages several TikTok accounts that belong to the
+company. Before this tool, the only way to let a team member publish was to give
+them the account password, which our information-security policy does not allow:
+shared credentials cannot be revoked individually, cannot be scoped to one
+account, and leave no record of who published what.
+
+This tool removes that problem. A department administrator connects each
+company-owned TikTok account once through TikTok's official OAuth screen. The
+access tokens stay with the system, and team members sign in with their own
+company account. They compose a post — caption, hashtags, and the video or images
+our team produced — and publish it to the accounts they have been granted. They
+never see, receive, or need the TikTok account credentials, and their access can
+be revoked in one click when they change role or leave the company.
+
+Every post is written by a member of our team and published by a named person, on
+content we produced ourselves. The system records who published what, to which
+account, and when. It has no content generation, no bulk import, no engagement
+automation, and no way to reach an account outside our company.
+
+---
+
+## 4. Who uses it, and who owns the accounts
+
+**Users:** employees of a single company — our own marketing team. Content
+creators who draft and publish, and a department head who administers access and
+connects the TikTok accounts.
+
+**Accounts posted to:** TikTok accounts owned and operated by that same company.
+Each is connected by the department head, who has authority to administer it,
+through TikTok's OAuth consent screen. Only an administrator can connect an
+account; team members have no way to add one.
+
+**Not in scope, explicitly:** we do not publish for clients, partners, agencies,
+influencers, or any account the company does not own. We do not offer this tool
+to anyone outside the company, do not sell or resell access, and do not operate
+it as a service on behalf of third parties. It runs on our own infrastructure for
+our own staff.
+
+---
+
+## 5. Scope justifications (ô "Reason for requesting" từng scope)
 
 ### `user.info.basic`
 
-We call `/v2/user/info/` once, immediately after the creator authorizes, to
-read their display name, username and avatar. These are shown in the app's
-"Channels" screen so the creator can confirm which TikTok account is
-connected, and again on the TikTok publishing form before publishing. This
-prevents the most common user error — publishing to the wrong account. We do
-not store this data anywhere except the local config file on the creator's own
-computer, and we do not use it for analytics or profiling.
+Called once after an administrator authorizes an account, to read the display
+name, username and avatar of the connected account. These appear in the account
+list and on the publishing form, so the person composing a post can confirm which
+company account they are about to publish to. With several similar brand
+accounts, this is what prevents publishing to the wrong one. Stored only in our
+own database, shown only inside the tool, never used for analytics, advertising,
+profiling, or training any model.
 
 ### `video.upload`
 
-This is our default and recommended mode. The video is uploaded to the
-creator's TikTok inbox as a draft; the creator then opens the TikTok mobile
-app, reviews the draft, adds sounds/effects, and decides whether and when to
-publish. Nothing becomes visible on TikTok without an explicit action by the
-creator inside TikTok's own app. For creators who prefer to keep final
-editorial control in TikTok, this is the only mode they ever need.
+Our default mode. The video is sent to the connected account's TikTok inbox as a
+draft; a team member then reviews it in the TikTok app, adds sounds or effects,
+and posts it. Nothing becomes visible on TikTok without an explicit action taken
+inside TikTok's own app. This mode fits the review step in our editorial process.
 
 ### `video.publish`
 
-For creators who have already finished their edit and want to publish without
-switching devices. Before every Direct Post we call
-`/v2/post/publish/creator_info/query/` and build the publishing form entirely
-from the response — see section 4 for exactly what the form does. Every Direct
-Post is triggered by the creator pressing "Publish" on content they composed
-themselves in the app.
+For content already reviewed and approved internally. Before every direct post
+the system calls `/v2/post/publish/creator_info/query/` and builds the publishing
+form entirely from that response — see section 6. Publishing is always triggered
+by a named employee pressing Publish on content our team produced. Nothing is
+published on a schedule the person did not set, and nothing is published without
+a person composing it first.
 
-We request both `video.upload` and `video.publish` because the mode is a
-per-post choice in our UI, not an app-wide setting.
+We request both because the mode is a per-post choice made by the person
+publishing, not an app-wide setting.
 
 ---
 
-## 4. UX compliance — how the publishing form is built
+## 6. UX compliance — how the publishing form is built
 
-Dán vào phần mô tả chi tiết hoặc ô ghi chú cho reviewer. Đây là phần TikTok
-kiểm tra kỹ nhất trong audit Direct Post, nên nói rõ từng điểm:
+Dán vào phần mô tả chi tiết hoặc ô ghi chú. Đây là phần TikTok kiểm tra kỹ nhất
+trong audit Direct Post:
 
-Our TikTok publishing form is built from the live `creator_info` response,
-never from hard-coded assumptions:
+Our TikTok publishing form is built from the live `creator_info` response, never
+from hard-coded assumptions:
 
-- **Account confirmation.** The creator's avatar and nickname from
-  `creator_info` are shown at the top of the form, with a refresh control.
+- **Account confirmation.** The connected account's avatar and nickname from
+  `creator_info` appear at the top of the form, with a refresh control.
 
-- **Privacy level.** The selector lists only the values returned in
+- **Viewership.** The selector lists only the values returned in
   `privacy_level_options`. Nothing is pre-selected: the form opens on
-  "— Select who can view this —" and the Publish action is blocked with a
-  clear message until the creator chooses. If the creator's available options
-  change between composing and publishing, the stale selection is rejected.
+  "— Select who can view this —" and publishing is blocked with a clear message
+  until the person chooses. A selection that is no longer available when
+  publishing starts is rejected rather than silently changed.
 
-- **Interaction settings.** The "disable comment", "disable Duet" and
-  "disable Stitch" controls are rendered as disabled and forced on whenever
-  `creator_info` reports `comment_disabled`, `duet_disabled` or
-  `stitch_disabled` — the app cannot re-enable something the creator turned
-  off at the account level.
+- **Interaction settings.** The comment, Duet and Stitch controls are rendered
+  disabled and forced on whenever `creator_info` reports `comment_disabled`,
+  `duet_disabled` or `stitch_disabled`. The tool cannot re-enable something
+  turned off at the account level.
 
-- **Content disclosure.** A "Disclose commercial content" switch reveals two
-  options: "Your brand" (`brand_organic_toggle`) and "Branded content"
-  (`brand_content_toggle`). Turning the switch on without choosing at least
-  one blocks publishing.
+- **Content disclosure.** A "Disclose commercial content" switch reveals "Your
+  brand" (`brand_organic_toggle`) and "Branded content"
+  (`brand_content_toggle`). Turning the switch on without choosing at least one
+  blocks publishing. As a company posting our own brand's content, "Your brand"
+  is our normal selection; our team is instructed to use "Branded content"
+  whenever a third party has paid for a post.
 
 - **Branded content cannot be private.** When "Branded content" is on,
-  `SELF_ONLY` is removed from the privacy list, and a previously selected
-  `SELF_ONLY` is cleared so the creator must choose again. The API adapter
-  enforces the same rule a second time, for both video and photo posts.
+  `SELF_ONLY` is removed from the viewership list and any previous `SELF_ONLY`
+  selection is cleared. The API layer enforces the same rule again, for both
+  video and photo posts.
 
-- **Consent declaration.** The form shows, next to the publish controls: "By
-  posting, you agree to TikTok's Music Usage Confirmation" — and, when Branded
-  content is on, "...to TikTok's Branded Content Policy and Music Usage
-  Confirmation", each linking to the official policy page.
+- **Consent declaration.** Shown next to the publish controls: "By posting, you
+  agree to TikTok's Music Usage Confirmation" — and, when Branded content is on,
+  "...to TikTok's Branded Content Policy and Music Usage Confirmation", each
+  linking to the official policy page.
 
-- **Draft mode.** When the creator chooses "Send to drafts"
-  (`MEDIA_UPLOAD`), none of these settings are shown or sent: the creator
-  completes everything inside the TikTok app. This is the default when the app
-  does not hold the `video.publish` scope.
+- **Draft mode.** When "Send to drafts" (`MEDIA_UPLOAD`) is chosen, none of these
+  settings are shown or sent: they are chosen inside the TikTok app by the person
+  finishing the post.
 
-An automated test suite locks each of the requirements above so they cannot be
-removed by a later change.
+An automated test suite locks each requirement above so it cannot be removed by a
+later change.
 
 ---
 
-## 5. Anti-spam statement (dán vào "Notes to reviewer")
+## 7. Access control and accountability
 
-We have designed this app so it cannot be used as a bulk-posting or
-spam tool, and we would like to make that explicit for the review:
+Dán vào ô mô tả hệ thống, hoặc phần notes. Đây là phần trả lời thẳng câu hỏi
+"nhiều người dùng chung thì ai chịu trách nhiệm":
 
-**One creator, one account, their own content.**
-The app is distributed as source that the creator runs on their own desktop.
-There is no multi-tenant server, no account marketplace, no proxy pool and no
-credential sharing. A single installation holds one TikTok connection,
-authorized interactively through TikTok's OAuth screen by the person sitting
-at that computer. The media uploaded is the creator's own artwork, selected
-file-by-file from their local disk — the app has no scraper, no content feed,
-no "repost trending video" feature and no bulk import.
+Access to the TikTok accounts is controlled by the system, not by sharing
+credentials:
 
-**Every post is composed by a human.**
-Title, caption and hashtags are typed into a form. There is no spinner, no
-template rotation, no AI caption mass-generation and no way to enqueue
-variations of the same post. A "Dry run" button lets the creator see exactly
-what will be sent before anything reaches TikTok. Realistic usage is a handful
-of posts per week — one per finished wallpaper set.
+- **Separate accounts.** Every team member signs in with their own username and
+  password. Passwords are hashed with scrypt and never leave the server; a new
+  member's initial password is shown to the administrator once, and they are
+  asked to choose their own on first sign-in.
 
-**Scheduling reduces volume, it does not increase it.**
-The optional queue exists so a creator can publish at a sensible hour instead
-of at 2 a.m. It posts strictly sequentially, one item per scheduler tick, and
-has no "post every N minutes" or "repeat" mode.
+- **Per-account permissions.** An administrator grants each person the specific
+  TikTok accounts they may post to. A person can also be limited to drafting
+  only, so they prepare posts but cannot publish them.
+
+- **Only administrators connect accounts.** Team members cannot add a TikTok
+  account, change app credentials, or reach an account they were not granted.
+  This is what keeps the set of accounts limited to those the company owns.
+
+- **Revocation is immediate.** Disabling a person, changing their role, or
+  removing a granted account takes effect at once — any open session ends on the
+  spot. Disconnecting a TikTok account also removes it from everyone's
+  permissions.
+
+- **Enforced on the server.** Permissions are checked in the API on every
+  request, not merely hidden in the interface. A request for an account the
+  person was not granted is refused, and the refusal is recorded.
+
+- **Audit log.** Every publish is recorded with the person, the TikTok account,
+  the time and the outcome — successes and refusals alike. Sign-ins, account
+  connections and permission changes are recorded too. This is the record our
+  information-security policy requires and that shared credentials could never
+  provide.
+
+---
+
+## 8. Anti-spam statement (dán vào "Notes to reviewer")
+
+We would like to address the spam question directly, because a tool that lets
+several people publish deserves the scrutiny:
+
+**One company, its own accounts.**
+Every TikTok account this tool touches is owned by the company that runs the
+tool, and is connected by an administrator through TikTok's own OAuth screen.
+There is no credential entry field, no account marketplace, no proxy pool, and no
+tenant separation — because there is only one tenant: us. We do not publish for
+clients and do not make the tool available outside the company.
+
+**API access replaces shared passwords — it is a security control.**
+We integrate with the API because our information-security policy forbids
+distributing account credentials to staff. Before this tool, a team member needed
+the TikTok password to publish. Now the credentials stay with the system, access
+is granted per person and revoked in one click, and every publish is attributable
+to a named employee. The integration takes the number of people holding account
+credentials from "everyone who posts" to "nobody".
+
+**Every post is composed by a person.**
+Caption, hashtags and media are entered by hand, and the media is video or images
+our team produced. There is no content generator, no template rotation, no
+caption spinner, no scraper, no "repost trending content" feature, and no bulk
+import. A dry-run control shows exactly what will be sent before anything reaches
+TikTok.
+
+**Scheduling spreads posts out; it does not multiply them.**
+The optional queue exists so a post goes out at a sensible hour rather than when
+it happened to be finished. It publishes strictly sequentially, one item per
+scheduler tick, and has no repeat, no "post every N minutes", and no way to
+enqueue variations of the same post.
 
 **We respect TikTok's rate and safety limits by design.**
-- `creator_info/query` is called before every Direct Post; a mismatched
+- `creator_info/query` runs before every direct post; a mismatched
   `privacy_level` is treated as a bug in our code, not something to retry.
 - `rate_limit_exceeded`, `spam_risk_too_many_posts`,
   `spam_risk_too_many_pending_share` and `reached_active_user_cap` are handled
-  with exponential backoff — never a tight retry loop.
-- We document TikTok's ~15 posts/day/creator limit and the 6 init/min limit in
-  our own setup guide so creators do not design workflows that fight them.
-- Unaudited installations are hard-defaulted to `SELF_ONLY`.
+  with exponential backoff, never a retry loop.
+- TikTok's per-creator daily limit is documented in our internal setup guide so
+  our team does not design workflows that fight it.
 
 **No engagement automation of any kind.**
-The app requests the minimum scopes needed to publish. It never follows,
-unfollows, likes, comments, views, messages, or reads other users' content.
-There is no analytics scraping and no interaction with anyone else's account.
+The tool requests the minimum scopes needed to publish. It never follows,
+unfollows, likes, comments, views, messages, or reads any other user's content.
+It performs no analytics scraping and touches no account other than the company
+accounts explicitly connected to it.
 
 ---
 
-## 6. Demo video script (TikTok bắt buộc có video cho Content Posting API)
+## 9. Audit application answers
 
-Quay một lần, ~2 phút, màn hình desktop, nói hoặc phụ đề tiếng Anh:
+Khi xin audit để bỏ giới hạn `SELF_ONLY`, TikTok hỏi về quy mô và cách kiểm soát
+nội dung. **Trả lời thật** — con số phóng đại là tự tạo cờ đỏ, và TikTok thấy
+được số creator đã authorize client key của bạn:
 
-1. Mở terminal, chạy `npm run serve`, cho thấy app khởi động ở
-   `http://127.0.0.1:4000` — nói rõ: *"this runs entirely on my own machine"*.
-2. Tab **Kênh** → **Kết nối TikTok** → hiện màn hình OAuth thật của TikTok →
-   chấp thuận → quay lại app, thấy avatar + tên tài khoản.
-3. Tab **Soạn bài** → gõ tiêu đề, mô tả, vài hashtag → kéo một file wallpaper
-   hoặc video **của chính bạn** vào. Nói rõ đây là tác phẩm gốc của bạn.
-4. Mở **Tuỳ biến theo từng kênh** → tab TikTok. Quay chậm và dừng lại ở từng
-   thứ — đây là phần reviewer tua đi tua lại:
-   - avatar + nickname lấy từ `creator_info`;
-   - dropdown chế độ hiển thị đang ở *— Chọn chế độ hiển thị —*, mở ra cho thấy
-     chỉ có đúng những giá trị tài khoản này được phép;
-   - ô Duet/Stitch bị khoá nếu tài khoản đã tắt (nếu tài khoản test không tắt,
-     vào app TikTok tắt trước khi quay, để có cái mà cho xem);
-   - bật **Khai báo nội dung thương mại** → hiện hai ô, bật *Nội dung có tài trợ*
-     → cho thấy *Chỉ mình tôi* biến mất khỏi danh sách;
-   - dòng tuyên bố đồng ý đổi thành có thêm *Chính sách nội dung có thương hiệu*.
-5. Thử bấm **Đăng ngay** khi chưa chọn chế độ hiển thị → cho thấy app chặn lại
-   kèm thông báo. Đây là cảnh có sức thuyết phục nhất trong cả video.
-6. Chọn chế độ hiển thị → bấm **Chạy thử** → cho thấy app hiển thị chính xác
-   payload sẽ gửi.
-7. Bấm **Đăng ngay** → trạng thái upload → mở app TikTok trên điện thoại →
-   thấy video đã lên đúng tài khoản, đúng chế độ hiển thị.
-8. Kết: quay lại tab Kênh, bấm **Ngắt kết nối** để cho thấy creator thu hồi
-   quyền được bất cứ lúc nào.
+**Expected volume.** Around [ĐIỀN SỐ THẬT, ví dụ 5–15] posts per week across
+[ĐIỀN SỐ] company accounts — one per finished piece of content. We are a
+marketing department publishing our own campaigns, not a high-frequency
+publisher.
 
-Đừng quay cảnh đăng nhiều bài liên tiếp — đó là hình ảnh reviewer đang tìm để
-từ chối.
+**Number of TikTok accounts.** [ĐIỀN SỐ] accounts, all owned by the company. This
+changes only when the company launches or retires a brand account.
 
----
+**Number of people using the tool.** [ĐIỀN SỐ, ví dụ 5–10] employees. Access is
+granted per person by the department head and revoked when someone changes role
+or leaves.
 
-## 7. Website, Redirect URI, Terms of Service, Privacy Policy
+**Where the content comes from.** Produced in-house — video shot or edited by us,
+images we designed, captions written by the person publishing. We do not
+republish other creators' content.
 
-Cả bốn ô này nằm trên cùng một nền tảng: bật **GitHub Pages** một lần là có đủ.
+**How we keep content compliant.** Posts are reviewed internally before
+publishing; team members can be limited to drafting so a manager publishes. The
+publishing form surfaces TikTok's own requirements at the moment of publishing —
+viewership options taken from the account, the commercial-content disclosure, and
+the Music Usage Confirmation declaration — so the person publishing sees and
+confirms them rather than a setting sitting in a config file. Every publish is
+recorded with the person, the account, the time and the result.
 
-### Bật GitHub Pages
-
-Repo → **Settings → Pages** → Source: nhánh chính, thư mục `/docs`. Sau vài
-phút bạn có bốn URL:
-
-| Ô trong form TikTok | URL |
-|---|---|
-| Website URL (platform Desktop) | `https://<user>.github.io/<repo>/` |
-| Terms of Service URL | `https://<user>.github.io/<repo>/terms.html` |
-| Privacy Policy URL | `https://<user>.github.io/<repo>/privacy.html` |
-| Redirect URI (Login Kit) — chỉ khi production | `https://<user>.github.io/<repo>/oauth-bridge/tiktok-callback.html` |
-
-Các trang tương ứng đã có sẵn trong repo:
-
-- [`docs/index.html`](./index.html) — trang giới thiệu, dùng cho ô *"the URL of
-  your official website"* mà platform Desktop yêu cầu
-- [`docs/terms.html`](./terms.html) — Terms of Service
-- [`docs/privacy.html`](./privacy.html) — Privacy Policy
-- [`docs/oauth-bridge/tiktok-callback.html`](./oauth-bridge/tiktok-callback.html)
-  — trang cầu nối OAuth (xem [setup-tiktok-telegram.md](./setup-tiktok-telegram.md#2-redirect-uri-tiktok-bắt-buộc-https))
-
-> **Phải sửa trước khi bật Pages:** cả ba trang đang để placeholder
-> `https://github.com/your-username/wallpaper-auto-marketing`. Thay bằng địa chỉ
-> repo thật, và điền địa chỉ liên hệ vào README — mục Contact của Terms và
-> Privacy đều trỏ về đó.
-
-### Redirect URI
-
-**Trong lúc phát triển (app Sandbox):** `http://127.0.0.1:4000/oauth/tiktok/callback`
-dùng được — Sandbox nhận http và loopback. Không cần trang cầu nối ở giai đoạn này.
-
-**Khi nộp review / chuyển production:** TikTok áp lại quy định *"URIs must be
-absolute and begin with `https`"*, không có ngoại lệ cho loopback. Lúc đó đăng ký
-URL trang cầu nối ở bảng trên, rồi dán đúng URL đó vào web admin: tab
-**Cài đặt** → TikTok → ô **Redirect URI**.
-
-Ghi chú kèm theo cho reviewer: *"The OAuth callback is a static page that only
-forwards the authorization code to the loopback interface on the creator's own
-machine; no traffic reaches any server of ours."*
-
-### Privacy policy nói gì
-
-Privacy policy đã nói rõ ba thứ TikTok soi: token lưu cục bộ và không gửi về
-server nào, từng scope dùng làm gì, và cách creator thu hồi quyền.
-
-### Ảnh (PULL_FROM_URL)
-
-Nếu đăng ảnh, domain host ảnh phải được verify trong mục **URL properties** của
-app. Không verify thì ảnh luôn fail — việc này không liên quan đến review nhưng
-hay bị quên.
+**Why public viewership is required.** We publish marketing content for the
+company's own brand accounts. `SELF_ONLY` posts are invisible to our audience, so
+the unaudited restriction makes the integration unusable for its purpose.
 
 ---
 
-## 8. Checklist trước khi nộp
+## 10. Checklist
 
-- [x] Tên app hiển thị là "Wallpaper Studio Publisher", không còn "auto marketing"
-- [x] Form đăng dựng từ `creator_info`, không hard-code privacy level
-- [x] Không chọn sẵn chế độ hiển thị, chặn đăng khi chưa chọn
-- [x] Khoá ô comment/Duet/Stitch theo cài đặt tài khoản
-- [x] Có công tắc khai báo nội dung thương mại (cả hai loại)
-- [x] Chặn branded content + `SELF_ONLY` ở cả UI và adapter
-- [x] Có tuyên bố đồng ý Music Usage Confirmation / Branded Content Policy
-- [x] Đã có trang giới thiệu, Terms of Service và Privacy Policy trong `docs/`
-- [x] Đã có trang cầu nối OAuth https, sẵn cho lúc chuyển production
-- [x] Redirect URI cấu hình được trong Cài đặt (Sandbox dùng http, production dùng https)
-- [ ] **Thay placeholder `your-username` trong `docs/index.html`, `terms.html`, `privacy.html`**
-- [ ] **Điền địa chỉ liên hệ thật vào README** (Terms và Privacy đều trỏ về đó)
-- [ ] **Bật GitHub Pages** (Settings → Pages → nhánh chính, thư mục `/docs`)
-- [ ] **Điền 3 URL vào form TikTok**: Website, ToS, Privacy (bảng mục 7)
-- [ ] **Đổi Redirect URI sang trang cầu nối https** khi rời Sandbox, và dán lại vào
-      web admin: Cài đặt → TikTok → ô Redirect URI
-- [ ] **Quay video demo** theo kịch bản mục 6
+**Đã có trong app:**
+- [x] Nhân viên đăng nhập bằng tài khoản riêng (mật khẩu băm bằng scrypt)
+- [x] Phân quyền theo từng kênh, có mức "chỉ được soạn, không được đăng"
+- [x] Thu hồi quyền tức thì — tắt tài khoản là phiên đang mở chết ngay
+- [x] Audit log: ai đăng gì, lên kênh nào, lúc nào, kết quả (kể cả lần bị từ chối)
+- [x] Quyền kiểm tra ở server, không chỉ ẩn trên giao diện
+- [x] Chỉ admin kết nối được kênh và sửa được cấu hình app
+- [x] Form đăng dựng từ `creator_info`, không hard-code viewership
+- [x] Không chọn sẵn viewership, chặn đăng khi chưa chọn
+- [x] Khoá comment/Duet/Stitch theo cài đặt tài khoản
+- [x] Công tắc khai báo nội dung thương mại (cả hai loại)
+- [x] Chặn branded content + `SELF_ONLY` ở cả UI và API layer
+- [x] Tuyên bố đồng ý Music Usage Confirmation / Branded Content Policy
+- [x] Giao diện hoàn toàn tiếng Anh
+- [x] Backoff đúng trên các mã lỗi rate limit và spam risk
+
+**Còn phải làm:**
+- [ ] **Deploy thành web nội bộ có domain + HTTPS.** Hiện chạy `127.0.0.1`, một
+      máy. Nhân viên phải truy cập được thì kịch bản mới đúng. Kèm một lợi ích:
+      có HTTPS thật là vấn đề `redirect_uri` biến mất, không cần trang cầu nối.
+- [ ] **Viết lại 3 trang tĩnh trong `docs/`** — xem phần dưới
+- [ ] **Điền số thật vào mục 9** (số bài/tuần, số kênh, số người dùng)
+- [ ] **Quay video demo** theo [mục 11](#11-kịch-bản-video-demo)
 - [ ] Verify domain host ảnh trong URL properties (chỉ cần nếu đăng ảnh)
 
-> **Cân nhắc chiến lược:** nếu muốn qua vòng đầu cho chắc, lần nộp đầu chỉ xin
-> `user.info.basic` + `video.upload` (chế độ gửi vào nháp). Không phải qua audit
-> UX của Direct Post, duyệt nhanh hơn nhiều. Xin `video.publish` ở lần sau, khi
-> app đã có lịch sử sạch — lúc đó phần UI ở mục 4 đã sẵn sàng để đưa ra.
+### Website, Terms of Service, Privacy Policy phải viết lại
+
+Ba trang tĩnh trong `docs/` đang mô tả **kịch bản cũ** — công cụ desktop cho hoạ
+sĩ cá nhân, tự host, *"everything stays on your own computer, we operate no
+servers"*. Với kịch bản mới những câu đó **sai**: hệ thống do công ty vận hành,
+dữ liệu nằm trên hạ tầng công ty, có nhiều người dùng.
+
+Reviewer đọc các URL này. Trang web nói "for independent wallpaper artists" mà
+form nộp nói "internal tool for our marketing department" là mâu thuẫn ngay
+trước mắt họ.
+
+- [`docs/index.html`](./index.html) — đổi thành trang giới thiệu hệ thống nội bộ
+  của công ty (hoặc trang giới thiệu công ty kèm mô tả hệ thống)
+- [`docs/terms.html`](./terms.html) — bỏ "one creator, one installation", đổi
+  thành điều khoản sử dụng nội bộ cho nhân viên
+- [`docs/privacy.html`](./privacy.html) — viết lại phần lưu trữ: dữ liệu nằm ở
+  đâu, ai truy cập được, giữ bao lâu, nhân viên có quyền gì với dữ liệu của mình
+
+---
+
+## 11. Kịch bản video demo
+
+Quay một lần, 2–3 phút, thuyết minh hoặc phụ đề tiếng Anh. Trọng tâm là **phân
+quyền** — đó là thứ chứng minh câu chuyện của bạn.
+
+1. **Đăng nhập bằng tài khoản một nhân viên.** Nói rõ: *"this is a team member's
+   own login — they do not have the TikTok account password."*
+2. **Cho thấy họ chỉ thấy những kênh được cấp**, và không có tab Team/Settings.
+3. **Soạn bài:** caption, hashtag, kéo video *do team sản xuất* vào.
+4. **Mở phần tuỳ chọn TikTok**, quay chậm từng thứ — reviewer tua lại đoạn này:
+   - avatar + nickname lấy từ `creator_info`;
+   - dropdown viewership đang ở *— Select who can view this —*, mở ra cho thấy
+     chỉ có đúng giá trị tài khoản đó cho phép;
+   - ô Duet/Stitch bị khoá nếu tài khoản đã tắt;
+   - bật **Disclose commercial content** → hiện hai lựa chọn, bật *Branded
+     content* → *Only me* biến mất khỏi danh sách;
+   - dòng tuyên bố đồng ý đổi thành có thêm *Branded Content Policy*.
+5. **Thử Publish khi chưa chọn viewership** → bị chặn kèm thông báo. Cảnh thuyết
+   phục nhất trong cả video.
+6. Chọn viewership → **Dry run** → cho thấy đúng payload sẽ gửi.
+7. **Publish** → mở app TikTok trên điện thoại → bài đã lên đúng tài khoản, đúng
+   viewership.
+8. **Đăng nhập lại bằng admin** → mở **Audit log**: ai đăng bài nào, lên kênh
+   nào, lúc nào. Rồi vào **Team** bỏ quyền kênh đó của nhân viên, quay lại tài
+   khoản nhân viên cho thấy kênh đã biến mất.
+9. Kết: trong Channels bấm **Disconnect** — công ty thu hồi quyền của app bất cứ
+   lúc nào.
+
+Đừng quay cảnh đăng nhiều bài liên tiếp, và đừng quay cảnh nhập mật khẩu TikTok
+vào hệ thống — hệ thống không có chỗ nào làm việc đó, và đó chính là điểm mạnh.
+
+---
+
+## 12. Các URL cần điền
+
+| Ô trong form TikTok | Giá trị |
+|---|---|
+| Website URL | URL trang giới thiệu (sau khi viết lại) |
+| Terms of Service URL | `.../terms.html` |
+| Privacy Policy URL | `.../privacy.html` |
+| Redirect URI | `https://<domain-noi-bo>/oauth/tiktok/callback` |
+
+Sandbox nhận `http://127.0.0.1`, app production thì TikTok đòi `https` — chi
+tiết trong
+[setup-tiktok-telegram.md](./setup-tiktok-telegram.md#2-redirect-uri-sandbox-nhận-http-production-đòi-https).
+
+> **Chiến lược nộp:** muốn chắc ăn thì vòng đầu chỉ xin `user.info.basic` +
+> `video.upload` (gửi nháp, nhân viên hoàn tất trong app TikTok). Không phải qua
+> audit UX của Direct Post, duyệt nhanh hơn nhiều. Xin `video.publish` và audit
+> bỏ `SELF_ONLY` ở vòng sau, khi app đã có lịch sử sạch — lúc đó phần UI ở mục 6
+> đã sẵn sàng để đưa ra.
