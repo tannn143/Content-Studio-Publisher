@@ -82,6 +82,8 @@ export class BasePlatform {
     this.mediaHost = ctx.mediaHost;
     this.dryRun = ctx.dryRun ?? false;
     this.signal = ctx.signal;
+    /** Key ma poster dung de dinh danh instance nay (channel id, hoac platform id). */
+    this.channelKey = ctx.channelKey ?? null;
     /** @type {Array<() => Promise<void>>} Cac viec don dep sau khi dang xong. */
     this._cleanups = [];
   }
@@ -174,7 +176,18 @@ export class BasePlatform {
       throw new UnsupportedError(/** @type {string} */ (check.reason), { platform: this.id });
     }
 
-    const options = { ...this.config.defaults, ...post.optionsFor(this.id) };
+    // overrides co the duoc dat theo NEN TANG ('tiktok' - dung khi goi tu code)
+    // hoac theo KENH ('ch_abc' - web admin dat theo tung kenh da ket noi).
+    // Phai doc ca hai: thieu nhanh channelKey thi moi tuy chon rieng cua kenh
+    // (postMode, privacyLevel, caption rieng...) bi bo lang le.
+    const channelOverrides = this.channelKey && this.channelKey !== this.id
+      ? post.optionsFor(this.channelKey)
+      : {};
+    const options = {
+      ...this.config.defaults,
+      ...post.optionsFor(this.id),
+      ...channelOverrides,
+    };
 
     if (this.dryRun) {
       const preview = await this.dryRunPreview(post, options);

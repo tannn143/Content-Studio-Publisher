@@ -900,8 +900,15 @@ function tiktokPostModeField(channel, per, mode, setVal) {
 function tiktokPrivacyField(per, data, setVal) {
   const allowed = (data.privacyLevelOptions ?? []).slice();
   const brandContent = Boolean(per.brandContentToggle);
+  const audited = Boolean(state.settings?.credentials?.tiktok?.audited);
+
+  // App chua audit thi TikTok CHI nhan SELF_ONLY - cac gia tri khac luon bi tu
+  // choi luc dang, du creator_info co tra ve. Loc bot de khong moi nguoi dung
+  // chon thu chac chan fail. (Van la tap con cua privacy_level_options nen
+  // khong vi pham yeu cau UX cua TikTok.)
+  const byAudit = audited ? allowed : allowed.filter((v) => v === 'SELF_ONLY');
   // Branded content khong duoc o che do rieng tu -> bo SELF_ONLY khoi danh sach.
-  const usable = brandContent ? allowed.filter((v) => v !== 'SELF_ONLY') : allowed;
+  const usable = brandContent ? byAudit.filter((v) => v !== 'SELF_ONLY') : byAudit;
   // Gia tri dang giu co the khong con trong danh sach (vd vua bat branded content,
   // hoac nap lai bai nhap cu) -> coi nhu chua chon, dung de select hien mot dang
   // ma state giu mot neo.
@@ -920,6 +927,18 @@ function tiktokPrivacyField(per, data, setVal) {
     ]),
     brandContent && allowed.includes('SELF_ONLY')
       ? el('p', { class: 'muted small' }, 'Đã ẩn "Chỉ mình tôi": nội dung thương mại không được để riêng tư.')
+      : null,
+    !audited && usable.length > 0
+      ? el('p', { class: 'muted small' },
+        'App chưa qua audit nên TikTok chỉ nhận "Chỉ mình tôi", và tài khoản phải '
+        + 'đang ở chế độ private lúc đăng. Muốn lên công khai ngay thì chọn '
+        + 'Kiểu đăng "Gửi vào nháp" rồi tự đăng trong app TikTok.')
+      : null,
+    !audited && usable.length === 0
+      ? el('p', { class: 'tiktok-problem' },
+        'App chưa audit chỉ đăng được "Chỉ mình tôi", nhưng chế độ đó lại không dùng '
+        + 'được cùng nội dung có tài trợ. Chuyển Kiểu đăng sang "Gửi vào nháp", hoặc '
+        + 'tắt khai báo tài trợ.')
       : null,
   ]);
 }
@@ -1029,6 +1048,12 @@ function tiktokComplianceError(channel, per, data) {
   if (data && Array.isArray(data.privacyLevelOptions) && data.privacyLevelOptions.length > 0
     && !data.privacyLevelOptions.includes(per.privacyLevel)) {
     return 'Chế độ hiển thị đã chọn không còn khả dụng cho tài khoản này — chọn lại.';
+  }
+  // Bai nhap luu tu truoc co the con giu gia tri cong khai du app chua audit.
+  const audited = Boolean(state.settings?.credentials?.tiktok?.audited);
+  if (!audited && per.privacyLevel !== 'SELF_ONLY') {
+    return 'App chưa qua audit nên TikTok chỉ nhận "Chỉ mình tôi". Chọn lại, hoặc '
+      + 'chuyển Kiểu đăng sang "Gửi vào nháp" để tự đăng công khai trong app TikTok.';
   }
 
   const disclose = Boolean(per.discloseContent || per.brandContentToggle || per.brandOrganicToggle);
@@ -1783,6 +1808,23 @@ function fillSettings() {
   for (const p of state.providers) {
     box.append(el('h3', { style: 'margin-top:14px' }, p.label));
     for (const f of p.credentialFields) {
+      if (f.type === 'boolean') {
+        box.append(el('label', { class: 'checkbox' }, [
+          el('input', {
+            type: 'checkbox',
+            id: `cred-${p.id}-${f.key}`,
+            checked: Boolean(s.credentials?.[p.id]?.[f.key]),
+          }),
+          f.label,
+        ]));
+        if (f.key === 'audited') {
+          box.append(el('p', { class: 'muted small' },
+            'Để tắt khi app chưa qua audit: TikTok chỉ cho đăng chế độ "Chỉ mình tôi", '
+            + 'và tài khoản phải đang ở chế độ private lúc đăng. Bật lên sau khi TikTok '
+            + 'duyệt app, lúc đó mới đăng công khai được.'));
+        }
+        continue;
+      }
       box.append(el('label', { class: 'field-label' }, f.label));
       box.append(el('input', {
         type: f.secret ? 'password' : 'text',
@@ -1793,7 +1835,8 @@ function fillSettings() {
       if (f.key === 'redirectUri') {
         box.append(el('p', { class: 'muted small' },
           'Để trống thì app dùng địa chỉ web admin. Đặt giá trị ở đây khi nền tảng '
-          + 'không nhận callback http://127.0.0.1 — TikTok bắt buộc https.'));
+          + 'không nhận callback http://127.0.0.1 — TikTok production đòi https, '
+          + 'còn app ở chế độ Sandbox thì nhận cả http.'));
       }
     }
   }
@@ -1818,7 +1861,12 @@ async function saveSettings() {
   for (const p of state.providers) {
     credentials[p.id] = {};
     for (const f of p.credentialFields) {
-      const v = $(`#cred-${p.id}-${f.key}`)?.value ?? '';
+      const node = $(`#cred-${p.id}-${f.key}`);
+      if (f.type === 'boolean') {
+        credentials[p.id][f.key] = Boolean(node?.checked);
+        continue;
+      }
+      const v = node?.value ?? '';
       // Field bi mat de trong = khong doi. Field thuong gui ca chuoi rong de xoa duoc.
       if (v || !f.secret) credentials[p.id][f.key] = v;
     }

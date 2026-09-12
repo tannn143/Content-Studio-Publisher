@@ -774,17 +774,18 @@ test('API: channels khong lo token nhung van tra postMode cho form TikTok', asyn
 
 // ============================================== redirect_uri (TikTok cần https)
 
-test('API: TikTok voi redirect_uri http -> bao dung nguyen nhan, khong de TikTok tu choi', async () => {
+test('API: TikTok chap nhan redirect_uri http (app o che do Sandbox)', async () => {
   await withServer(async ({ call }) => {
     await call('/api/settings', {
       method: 'PUT',
       body: JSON.stringify({ credentials: { tiktok: { clientKey: 'CK', clientSecret: 'CS' } } }),
     });
-    // Khong dat redirectUri -> mac dinh la http://127.0.0.1:<port>/... -> phai chan.
+    // Khong dat redirectUri -> mac dinh la http://127.0.0.1:<port>/oauth/tiktok/callback.
+    // Sandbox nhan URL nay, nen app KHONG duoc tu chan theo scheme.
     const res = await call('/api/oauth/tiktok/start', { method: 'POST', body: '{}' });
-    assert.equal(res.status, 400);
-    assert.match(String(res.data.error), /https/i);
-    assert.match(String(res.data.hint ?? ''), /cau noi|Cai dat/i);
+    assert.equal(res.status, 200);
+    const redirect = new URL(res.data.url).searchParams.get('redirect_uri');
+    assert.match(redirect, /^http:\/\/127\.0\.0\.1:\d+\/oauth\/tiktok\/callback$/);
   });
 });
 
@@ -838,5 +839,145 @@ test('API: settings tra ve redirectUri nhung van che secret', async () => {
     assert.equal(data.settings.credentials.tiktok.redirectUri, 'https://example.test/cb');
     assert.equal(data.settings.credentials.tiktok.clientKey, 'CK');
     assert.equal(JSON.stringify(data).includes('SUPERSECRET'), false, 'secret khong duoc lo');
+  });
+});
+
+// ====================================== TikTok: doi code lay token (v2/oauth/token)
+
+/** Chay tron mot vong OAuth TikTok voi fetch gia lap, tra ve request da ghi. */
+async function runTikTokOAuth(call, mock, creds = {}) {
+  await call('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({
+      credentials: { tiktok: { clientKey: 'CK', clientSecret: 'CS', ...creds } },
+    }),
+  });
+  const start = await call('/api/oauth/tiktok/start', { method: 'POST', body: '{}' });
+  const state = new URL(start.data.url).searchParams.get('state');
+  return { state, start };
+}
+
+test('API: doi code TikTok gui dung content-type va tham so bat buoc', async () => {
+  const mock = createMockFetch([
+    {
+      match: '/v2/oauth/token/',
+      json: {
+        access_token: 'AT', refresh_token: 'RT', expires_in: 86400,
+        open_id: 'open1', scope: 'user.info.basic,video.publish',
+      },
+    },
+    { match: '/v2/user/info/', json: { data: { user: { open_id: 'open1', display_name: 'Wall Guy', username: 'wallguy' } } } },
+  ]);
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => (String(url).includes('tiktokapis.com')
+    ? mock.fetchImpl(url, init)
+    : realFetch(url, init));
+  try {
+    await withServer(async ({ call, base }) => {
+      const { state } = await runTikTokOAuth(call, mock);
+      const res = await fetch(`${base}/oauth/tiktok/callback?code=act.abc123&state=${state}`, { redirect: 'manual' });
+      assert.equal(res.status, 302);
+      assert.match(res.headers.get('location'), /[?&]ok=/, 'phai ket noi thanh cong');
+
+      const req = mock.findRequest('/v2/oauth/token/');
+      // Endpoint nay tu choi khi content-type co them '; charset=utf-8'.
+      assert.equal(req.headers['content-type'], 'application/x-www-form-urlencoded');
+      assert.equal(req.body.grant_type, 'authorization_code');
+      assert.equal(req.body.client_key, 'CK');
+      assert.equal(req.body.client_secret, 'CS');
+      assert.equal(req.body.code, 'act.abc123');
+      assert.ok(req.body.code_verifier, 'PKCE: phai gui code_verifier');
+      assert.match(req.body.redirect_uri, /^http:\/\/127\.0\.0\.1:\d+\/oauth\/tiktok\/callback$/);
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('API: client key/secret dinh khoang trang van doi duoc token', async () => {
+  const mock = createMockFetch([
+    {
+      match: '/v2/oauth/token/',
+      handler: (req) => (req.body.client_key === 'CK' && req.body.client_secret === 'CS'
+        ? { json: { access_token: 'AT', refresh_token: 'RT', expires_in: 86400, open_id: 'o1', scope: 'video.publish' } }
+        : { status: 400, json: { error: 'invalid_request', error_description: 'The request parameters are malformed.' } }),
+    },
+    { match: '/v2/user/info/', json: { data: { user: { open_id: 'o1', display_name: 'X' } } } },
+  ]);
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => (String(url).includes('tiktokapis.com')
+    ? mock.fetchImpl(url, init)
+    : realFetch(url, init));
+  try {
+    await withServer(async ({ call, base }) => {
+      // Nguoi dung dan key/secret kem khoang trang va xuong dong.
+      const { state } = await runTikTokOAuth(call, mock, { clientKey: '  CK\n', clientSecret: ' CS  ' });
+      const res = await fetch(`${base}/oauth/tiktok/callback?code=act.x&state=${state}`, { redirect: 'manual' });
+      assert.match(res.headers.get('location'), /[?&]ok=/, 'khoang trang khong duoc lam hong request');
+      assert.equal(mock.findRequest('/v2/oauth/token/').body.client_key, 'CK');
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('API: TikTok tu choi doi code -> loi neu ro redirect_uri va client_key da dung', async () => {
+  const mock = createMockFetch([
+    {
+      match: '/v2/oauth/token/',
+      status: 400,
+      json: { error: 'invalid_request', error_description: 'The request parameters are malformed.', log_id: 'LOG123' },
+    },
+  ]);
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => (String(url).includes('tiktokapis.com')
+    ? mock.fetchImpl(url, init)
+    : realFetch(url, init));
+  try {
+    await withServer(async ({ call, base }) => {
+      const { state } = await runTikTokOAuth(call, mock);
+      const res = await fetch(`${base}/oauth/tiktok/callback?code=act.x&state=${state}`, { redirect: 'manual' });
+      const loc = res.headers.get('location');
+      const msg = decodeURIComponent(loc.split('error=')[1] ?? '');
+      // Loi phai in ra du lieu doi chieu duoc, khong bat nguoi dung tu doan.
+      assert.match(msg, /malformed/i);
+      assert.match(msg, /127\.0\.0\.1/, 'phai in redirect_uri vua gui');
+      assert.match(msg, /CK/, 'phai in client_key dang dung');
+      assert.match(msg, /LOG123/, 'phai in log_id de bao TikTok support');
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+// ============================================ TikTok: co "app da qua audit"
+
+test('API: co audited luu duoc dang boolean, khong bi bien thanh chuoi', async () => {
+  await withServer(async ({ call }) => {
+    await call('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ credentials: { tiktok: { clientKey: 'CK', clientSecret: 'CS', audited: true } } }),
+    });
+    let { data } = await call('/api/settings');
+    assert.equal(data.settings.credentials.tiktok.audited, true);
+
+    // Tat lai: false phai ghi de duoc (khong bi coi la "bo trong = khong doi").
+    await call('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ credentials: { tiktok: { audited: false } } }),
+    });
+    ({ data } = await call('/api/settings'));
+    assert.equal(data.settings.credentials.tiktok.audited, false);
+    assert.equal(data.settings.credentials.tiktok.clientKey, 'CK', 'khong duoc lam mat client key');
+  });
+});
+
+test('API: mac dinh audited = false (app moi luon chua audit)', async () => {
+  await withServer(async ({ call }) => {
+    const { data } = await call('/api/settings');
+    assert.equal(data.settings.credentials.tiktok.audited, false);
   });
 });

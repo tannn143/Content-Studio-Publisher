@@ -776,16 +776,23 @@ function buildRouter(deps) {
       patch.credentials = {};
       for (const [provider, fields] of Object.entries(body.credentials)) {
         if (!DEFAULT_SETTINGS.credentials[provider]) continue;
-        const isSecret = new Set(
-          (OAUTH_PROVIDERS[provider]?.credentialFields ?? []).filter((f) => f.secret).map((f) => f.key),
-        );
+        const declared = OAUTH_PROVIDERS[provider]?.credentialFields ?? [];
+        const isSecret = new Set(declared.filter((f) => f.secret).map((f) => f.key));
+        const isBoolean = new Set(declared.filter((f) => f.type === 'boolean').map((f) => f.key));
         patch.credentials[provider] = {};
         for (const [k, v] of Object.entries(/** @type {any} */ (fields))) {
-          if (v === undefined || v === null || String(v).includes('•')) continue;
+          if (v === undefined || v === null) continue;
+          if (isBoolean.has(k)) {
+            patch.credentials[provider][k] = v === true || v === 'true';
+            continue;
+          }
+          if (String(v).includes('•')) continue;
           // Field bi mat: bo trong = "khong doi". Field thuong (vd redirectUri):
           // bo trong = "xoa di, quay ve gia tri mac dinh".
           if (v === '' && isSecret.has(k)) continue;
-          patch.credentials[provider][k] = String(v);
+          // Trim: copy tay tu trang developer rat hay dinh khoang trang/xuong dong,
+          // gay loi 'invalid_request' kho doan luc doi token.
+          patch.credentials[provider][k] = String(v).trim();
         }
       }
     }
@@ -998,6 +1005,7 @@ function redactSettings(settings) {
         clientKey: settings.credentials?.tiktok?.clientKey ?? '',
         clientSecret: mask(settings.credentials?.tiktok?.clientSecret),
         redirectUri: settings.credentials?.tiktok?.redirectUri ?? '',
+        audited: Boolean(settings.credentials?.tiktok?.audited),
       },
     },
     mediaHost: {

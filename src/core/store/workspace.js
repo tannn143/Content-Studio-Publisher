@@ -70,7 +70,8 @@ export const DEFAULT_SETTINGS = {
     google: { clientId: '', clientSecret: '', redirectUri: '' },
     facebook: { appId: '', appSecret: '', graphVersion: 'v26.0', redirectUri: '' },
     // TikTok tu choi redirect_uri khong phai https -> hau het setup phai tu dat.
-    tiktok: { clientKey: '', clientSecret: '', redirectUri: '' },
+    // audited=false: app moi tao luon chua audit -> chi dang duoc SELF_ONLY.
+    tiktok: { clientKey: '', clientSecret: '', redirectUri: '', audited: false },
   },
   /** Cau hinh noi luu media cong khai (Instagram/TikTok anh can URL cong khai). */
   mediaHost: {

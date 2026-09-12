@@ -221,7 +221,7 @@ phút bạn có bốn URL:
 | Website URL (platform Desktop) | `https://<user>.github.io/<repo>/` |
 | Terms of Service URL | `https://<user>.github.io/<repo>/terms.html` |
 | Privacy Policy URL | `https://<user>.github.io/<repo>/privacy.html` |
-| Redirect URI (Login Kit) | `https://<user>.github.io/<repo>/oauth-bridge/tiktok-callback.html` |
+| Redirect URI (Login Kit) — chỉ khi production | `https://<user>.github.io/<repo>/oauth-bridge/tiktok-callback.html` |
 
 Các trang tương ứng đã có sẵn trong repo:
 
@@ -239,10 +239,13 @@ Các trang tương ứng đã có sẵn trong repo:
 
 ### Redirect URI
 
-**Không dùng** `http://127.0.0.1:4000/oauth/tiktok/callback` — TikTok từ chối
-mọi URI không bắt đầu bằng `https`, kể cả loopback. Đăng ký URL trang cầu nối ở
-bảng trên, rồi dán đúng URL đó vào web admin: tab **Cài đặt** → TikTok → ô
-**Redirect URI**.
+**Trong lúc phát triển (app Sandbox):** `http://127.0.0.1:4000/oauth/tiktok/callback`
+dùng được — Sandbox nhận http và loopback. Không cần trang cầu nối ở giai đoạn này.
+
+**Khi nộp review / chuyển production:** TikTok áp lại quy định *"URIs must be
+absolute and begin with `https`"*, không có ngoại lệ cho loopback. Lúc đó đăng ký
+URL trang cầu nối ở bảng trên, rồi dán đúng URL đó vào web admin: tab
+**Cài đặt** → TikTok → ô **Redirect URI**.
 
 Ghi chú kèm theo cho reviewer: *"The OAuth callback is a static page that only
 forwards the authorization code to the loopback interface on the creator's own
@@ -271,13 +274,14 @@ hay bị quên.
 - [x] Chặn branded content + `SELF_ONLY` ở cả UI và adapter
 - [x] Có tuyên bố đồng ý Music Usage Confirmation / Branded Content Policy
 - [x] Đã có trang giới thiệu, Terms of Service và Privacy Policy trong `docs/`
-- [x] Đã có trang cầu nối OAuth https (Redirect URI không dùng được 127.0.0.1)
-- [x] App chặn trước và báo rõ nếu Redirect URI chưa phải https
+- [x] Đã có trang cầu nối OAuth https, sẵn cho lúc chuyển production
+- [x] Redirect URI cấu hình được trong Cài đặt (Sandbox dùng http, production dùng https)
 - [ ] **Thay placeholder `your-username` trong `docs/index.html`, `terms.html`, `privacy.html`**
 - [ ] **Điền địa chỉ liên hệ thật vào README** (Terms và Privacy đều trỏ về đó)
 - [ ] **Bật GitHub Pages** (Settings → Pages → nhánh chính, thư mục `/docs`)
-- [ ] **Điền 4 URL vào form TikTok**: Website, ToS, Privacy, Redirect URI (bảng mục 7)
-- [ ] **Dán Redirect URI vào web admin**: Cài đặt → TikTok → ô Redirect URI
+- [ ] **Điền 3 URL vào form TikTok**: Website, ToS, Privacy (bảng mục 7)
+- [ ] **Đổi Redirect URI sang trang cầu nối https** khi rời Sandbox, và dán lại vào
+      web admin: Cài đặt → TikTok → ô Redirect URI
 - [ ] **Quay video demo** theo kịch bản mục 6
 - [ ] Verify domain host ảnh trong URL properties (chỉ cần nếu đăng ảnh)
 

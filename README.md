@@ -315,14 +315,15 @@ Một lần kết nối tạo ra **nhiều kênh**: mỗi Page một kênh Faceb
 ### TikTok
 
 1. [developers.tiktok.com](https://developers.tiktok.com) → tạo app → bật sản phẩm **Content Posting API**
-2. Redirect URI: **phải là https** — TikTok từ chối `http://127.0.0.1`. Dùng trang cầu nối
-   [`docs/oauth-bridge/tiktok-callback.html`](docs/oauth-bridge/tiktok-callback.html) đặt trên GitHub Pages;
-   xem [hướng dẫn](docs/setup-tiktok-telegram.md#2-redirect-uri-tiktok-bắt-buộc-https)
-3. Điền Client Key/Secret **và Redirect URI đó** vào tab Cài đặt → **Kết nối TikTok**
+2. Redirect URI: app **Sandbox** dán thẳng `http://127.0.0.1:4000/oauth/tiktok/callback`.
+   App **production** phải là https → dùng trang cầu nối
+   [`docs/oauth-bridge/tiktok-callback.html`](docs/oauth-bridge/tiktok-callback.html);
+   xem [hướng dẫn](docs/setup-tiktok-telegram.md#2-redirect-uri-sandbox-nhận-http-production-đòi-https)
+3. Điền Client Key/Secret vào tab Cài đặt → **Kết nối TikTok**
 
 | ⚠️ Cần biết | Chi tiết |
 |---|---|
-| App chưa audit | **Chỉ đăng được `SELF_ONLY`** (riêng tư) và tài khoản phải ở chế độ private. Muốn công khai phải qua audit của TikTok |
+| App chưa audit | **Chỉ đăng được `SELF_ONLY`** (riêng tư) **và** tài khoản TikTok phải đang ở chế độ private lúc đăng. Web admin mặc định coi app là chưa audit → dropdown chế độ hiển thị chỉ còn "Chỉ mình tôi". Qua audit rồi thì bật ô *App đã qua audit* trong Cài đặt |
 | Giải pháp thay thế | Dùng `postMode: 'MEDIA_UPLOAD'` → video vào **nháp trong app TikTok**, creator tự đăng công khai |
 | Ảnh | **Chỉ nhận PULL_FROM_URL** từ **domain đã xác minh** trong app. Video thì dùng FILE_UPLOAD nên không cần xác minh domain |
 | Refresh token | **Xoay mỗi lần refresh** → phải dùng `FileTokenStore` để lưu token mới, nếu không lần sau mất quyền |

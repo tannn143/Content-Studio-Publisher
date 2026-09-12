@@ -801,12 +801,17 @@ export class TikTokPlatform extends BasePlatform {
 
     const res = await this.http.request(TOKEN_URL, {
       method: 'POST',
-      headers: { 'cache-control': 'no-cache' },
+      headers: {
+        'cache-control': 'no-cache',
+        // Giong luc doi code: endpoint nay khong chiu '; charset=utf-8'.
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       form: {
-        client_key: this.config.clientKey,
-        client_secret: this.config.clientSecret,
+        // Trim: key/secret copy tay hay dinh khoang trang -> 'invalid_request'.
+        client_key: String(this.config.clientKey ?? '').trim(),
+        client_secret: String(this.config.clientSecret ?? '').trim(),
         grant_type: 'refresh_token',
-        refresh_token: refreshToken,
+        refresh_token: String(refreshToken ?? '').trim(),
       },
       platform: this.id,
       signal: this.signal,

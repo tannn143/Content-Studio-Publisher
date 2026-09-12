@@ -72,14 +72,18 @@ export const OAUTH_PROVIDERS = {
     credentialFields: [
       { key: 'clientKey', label: 'Client Key', required: true },
       { key: 'clientSecret', label: 'Client Secret', required: true, secret: true },
-      { key: 'redirectUri', label: 'Redirect URI (TikTok BAT BUOC https - xem huong dan)', hint: true },
+      { key: 'redirectUri', label: 'Redirect URI (de trong = dung dia chi web admin)', hint: true },
+      // App chua audit chi dang duoc SELF_ONLY -> UI dua vao co nay de khoi
+      // moi nguoi dung chon che do chac chan bi tu choi.
+      { key: 'audited', label: 'App da qua audit cua TikTok (cho dang cong khai)', type: 'boolean' },
     ],
     scopes: OAUTH_SCOPES.tiktok,
-    // TikTok tu choi moi redirect_uri khong bat dau bang https (ke ca 127.0.0.1),
-    // nen ban gan nhu luon phai dat redirectUri tro toi mot trang cau noi https.
-    setupHint: 'developers.tiktok.com > App: bat san pham "Content Posting API". Redirect URI PHAI bat dau bang https - '
-      + 'http://127.0.0.1 se bi tu choi ngay o man hinh cap quyen. Dung trang cau noi https (xem docs/setup-tiktok-telegram.md) '
-      + 'roi dan URL do vao o Redirect URI ben duoi. App CHUA duoc audit chi dang duoc che do SELF_ONLY (rieng tu).',
+    // Sandbox nhan http/localhost; app production thi TikTok doi https -> luc do
+    // dat redirectUri tro toi trang cau noi https (docs/oauth-bridge).
+    setupHint: 'developers.tiktok.com > App: bat san pham "Content Posting API", them Redirect URI dung bang URL callback. '
+      + 'App o che do Sandbox nhan ca http://127.0.0.1; khi chuyen sang production TikTok doi https - '
+      + 'luc do dung trang cau noi https (xem docs/setup-tiktok-telegram.md). '
+      + 'App CHUA duoc audit chi dang duoc che do SELF_ONLY (rieng tu).',
   },
 };
 
@@ -133,18 +137,14 @@ export class OAuthManager {
       );
     }
 
-    // TikTok tu choi moi redirect_uri khong phai https va bao loi rat kho hieu
-    // ("This may be due to specific app settings" + chu "redirect_uri"), nen bat
-    // truoc o day de bao dung nguyen nhan thay vi de nguoi dung doan.
-    if (provider === 'tiktok' && !/^https:\/\//i.test(opts.redirectUri)) {
-      throw new ConfigError(
-        `TikTok chi chap nhan redirect_uri bat dau bang https, dang co: ${opts.redirectUri}`,
-        {
-          hint: 'Dat "Redirect URI" cua TikTok trong tab Cai dat tro toi mot trang https cau noi, '
-            + 'roi dang ky dung URL do trong app TikTok. Xem docs/setup-tiktok-telegram.md muc "Redirect URI".',
-        },
-      );
-    }
+    // Khong chan redirect_uri theo scheme o day.
+    //
+    // Tai lieu Login Kit ghi "URIs must be absolute and begin with https", nhung
+    // app o che do SANDBOX cua TikTok nhan ca http va localhost - da kiem chung
+    // thuc te. Chan cung se lam sandbox khong dung duoc.
+    //
+    // Nen tang tu quyet dinh: sai scheme thi TikTok tra ve loi redirect_uri ngay
+    // o man hinh cap quyen.
 
     const state = crypto.randomBytes(24).toString('base64url');
     /** @type {string} */
@@ -394,13 +394,25 @@ export class OAuthManager {
   // ------------------------------------------------------------------ tiktok
 
   async _connectTikTok(creds, code, entry) {
+    // Credentials copy tay rat hay dinh khoang trang/xuong dong o dau-cuoi.
+    // TikTok tra ve 'invalid_request: The request parameters are malformed.'
+    // chu khong noi field nao sai -> trim o day de khoi phai doan.
+    const clientKey = String(creds.clientKey ?? '').trim();
+    const clientSecret = String(creds.clientSecret ?? '').trim();
+    // `code` da duoc URLSearchParams decode san (docs yeu cau gui ban da decode).
+    const authCode = String(code ?? '').trim();
+
     const token = await this.http.request(TIKTOK_TOKEN, {
       method: 'POST',
-      headers: { 'cache-control': 'no-cache' },
+      headers: {
+        'cache-control': 'no-cache',
+        // Dung CHINH XAC nhu docs: endpoint nay tu choi khi co them '; charset=utf-8'.
+        'content-type': 'application/x-www-form-urlencoded',
+      },
       form: {
-        client_key: creds.clientKey,
-        client_secret: creds.clientSecret,
-        code,
+        client_key: clientKey,
+        client_secret: clientSecret,
+        code: authCode,
         grant_type: 'authorization_code',
         redirect_uri: entry.redirectUri,
         ...(entry.codeVerifier ? { code_verifier: entry.codeVerifier } : {}),
@@ -410,7 +422,16 @@ export class OAuthManager {
     if (!token.ok || !token.data?.access_token) {
       throw new AuthError(
         `TikTok tu choi doi code: ${token.data?.error ?? token.status} ${token.data?.error_description ?? ''}`,
-        { details: token.data, hint: 'Kiem tra Redirect URI khai bao trong app TikTok co khop chinh xac.' },
+        {
+          details: token.data,
+          // TikTok khong noi field nao sai -> in ra du lieu doi chieu duoc.
+          hint: 'Doi chieu: redirect_uri vua gui la '
+            + `'${entry.redirectUri}' - phai TRUNG TUNG KY TU voi Redirect URI khai bao `
+            + `trong app TikTok. client_key dang dung: '${clientKey}'. `
+            + `PKCE: ${entry.codeVerifier ? 'co gui code_verifier' : 'KHONG gui code_verifier'}. `
+            + `${token.data?.log_id ? `log_id=${token.data.log_id} (dua ma nay cho TikTok support). ` : ''}`
+            + 'Neu client_key/secret vua copy lai thi luu lai trong tab Cai dat roi thu lai.',
+        },
       );
     }
 

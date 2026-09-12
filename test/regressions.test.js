@@ -18,6 +18,7 @@ import { AccessTokenManager, MemoryTokenStore, tokenStoreKey } from '../src/core
 import { toMedia } from '../src/core/media.js';
 import { JsonCollection } from '../src/core/store/jsonstore.js';
 import { SocialPoster } from '../src/core/poster.js';
+import { BasePlatform } from '../src/platforms/base.js';
 import { TikTokPlatform } from '../src/platforms/tiktok.js';
 import { TelegramPlatform, splitAlbumGroups } from '../src/platforms/telegram.js';
 import { buildTitle } from '../src/platforms/youtube.js';
@@ -598,4 +599,111 @@ test('regression: refresh token duoc dedup giua CAC INSTANCE (khong chi trong 1 
   assert.equal(b, 'AT1');
   assert.equal(c, 'AT1');
   assert.equal((await store.get('tiktok:shared-key')).refreshToken, 'RT1');
+});
+
+// ================================ overrides theo KENH (bug: bi bo lang le)
+
+/**
+ * Adapter gia lap chi de bat lai `options` ma BasePlatform.publish() dung.
+ */
+class OptionSpyPlatform extends BasePlatform {
+  static id = 'optionspy';
+
+  static displayName = 'Option Spy';
+
+  static capabilities = {
+    text: true, image: true, video: true, album: true,
+    limits: { title: 999, caption: 999, hashtags: Infinity },
+  };
+
+  validateConfig() { return true; }
+
+  async doPublish(post, options) {
+    OptionSpyPlatform.seen = options;
+    return { platform: this.id, ok: true, id: 'x', status: 'posted' };
+  }
+}
+
+test('poster: overrides theo CHANNEL ID phai xuong duoc adapter', async () => {
+  // Day chinh la bug da xay ra: web admin luu perChannel theo channel id, nhung
+  // BasePlatform.publish() chi doc post.optionsFor(this.id) = 'tiktok' -> moi
+  // tuy chon rieng cua kenh (postMode, privacyLevel, caption rieng) bi mat,
+  // TikTok van Direct Post va bao loi app chua audit.
+  OptionSpyPlatform.seen = undefined;
+  const poster = new SocialPoster({
+    registry: { optionspy: OptionSpyPlatform },
+    platforms: { ch_abc123: { platform: 'optionspy' } },
+    logger: noopLogger,
+  });
+
+  const report = await poster.post({
+    title: 'chung',
+    description: 'chung',
+    overrides: { ch_abc123: { postMode: 'MEDIA_UPLOAD', privacyLevel: 'SELF_ONLY', title: 'rieng' } },
+  });
+
+  assert.equal(report.succeeded.length, 1);
+  assert.equal(OptionSpyPlatform.seen?.postMode, 'MEDIA_UPLOAD');
+  assert.equal(OptionSpyPlatform.seen?.privacyLevel, 'SELF_ONLY');
+  assert.equal(OptionSpyPlatform.seen?.title, 'rieng', 'caption rieng theo kenh cung phai xuong');
+});
+
+test('poster: overrides theo PLATFORM ID van hoat dong (API dung tu code)', async () => {
+  OptionSpyPlatform.seen = undefined;
+  const poster = new SocialPoster({
+    registry: { optionspy: OptionSpyPlatform },
+    platforms: { optionspy: { platform: 'optionspy' } },
+    logger: noopLogger,
+  });
+
+  await poster.post({
+    title: 'x',
+    overrides: { optionspy: { postMode: 'DIRECT_POST' } },
+  });
+  assert.equal(OptionSpyPlatform.seen?.postMode, 'DIRECT_POST');
+});
+
+test('poster: override theo kenh thang override theo nen tang', async () => {
+  OptionSpyPlatform.seen = undefined;
+  const poster = new SocialPoster({
+    registry: { optionspy: OptionSpyPlatform },
+    platforms: { ch_one: { platform: 'optionspy' } },
+    logger: noopLogger,
+  });
+
+  await poster.post({
+    title: 'x',
+    overrides: {
+      optionspy: { postMode: 'DIRECT_POST', privacyLevel: 'PUBLIC_TO_EVERYONE' },
+      ch_one: { postMode: 'MEDIA_UPLOAD' },
+    },
+  });
+  assert.equal(OptionSpyPlatform.seen?.postMode, 'MEDIA_UPLOAD', 'kenh cu the phai thang');
+  assert.equal(OptionSpyPlatform.seen?.privacyLevel, 'PUBLIC_TO_EVERYONE', 'field khong bi ghi de thi giu lai');
+});
+
+test('poster: hai kenh cung nen tang nhan override rieng cua minh', async () => {
+  /** @type {Record<string, any>} */
+  const seen = {};
+  class TwoChannelSpy extends OptionSpyPlatform {
+    static id = 'twospy';
+
+    async doPublish(post, options) {
+      seen[this.channelKey] = options;
+      return { platform: this.id, ok: true, id: 'x', status: 'posted' };
+    }
+  }
+
+  const poster = new SocialPoster({
+    registry: { twospy: TwoChannelSpy },
+    platforms: { ch_a: { platform: 'twospy' }, ch_b: { platform: 'twospy' } },
+    logger: noopLogger,
+  });
+
+  await poster.post({
+    title: 'x',
+    overrides: { ch_a: { postMode: 'MEDIA_UPLOAD' }, ch_b: { postMode: 'DIRECT_POST' } },
+  });
+  assert.equal(seen.ch_a?.postMode, 'MEDIA_UPLOAD');
+  assert.equal(seen.ch_b?.postMode, 'DIRECT_POST');
 });

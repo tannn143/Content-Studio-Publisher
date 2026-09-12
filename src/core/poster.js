@@ -125,6 +125,10 @@ export class SocialPoster {
         store: this.store,
         mediaHost: cfg.mediaHost ?? this.mediaHost,
         dryRun: this.dryRun,
+        // Key trong `platforms` la CHANNEL ID khi dung tu web admin (mot nen
+        // tang co the co nhieu kenh). Adapter can biet key nay de doc dung
+        // overrides cua rieng kenh minh.
+        channelKey: id,
       });
       this.instances.set(id, instance);
     }
@@ -381,6 +385,9 @@ export class SocialPoster {
       mediaHost: cfg.mediaHost ?? this.mediaHost,
       dryRun: ctx.dryRun ?? this.dryRun,
       signal: ctx.signal,
+      // Day la instance THUC SU dung de dang (xem _publishOne). Thieu channelKey
+      // o day thi moi override theo kenh bi bo lang le.
+      channelKey: id,
     });
   }
 

@@ -10,8 +10,9 @@
 
 1. [developers.tiktok.com](https://developers.tiktok.com) → **Manage apps** → tạo app.
 2. Thêm sản phẩm **Content Posting API**.
-3. **Login Kit** → Redirect URI: xem [mục 2 bên dưới](#2-redirect-uri-tiktok-bắt-buộc-https) —
-   không dán được địa chỉ `127.0.0.1` vào đây.
+3. **Login Kit** → Redirect URI: với app Sandbox dán thẳng
+   `http://127.0.0.1:4000/oauth/tiktok/callback`; app production phải là https —
+   xem [mục 2](#2-redirect-uri-sandbox-nhận-http-production-đòi-https).
 4. Xin scope: `video.publish` (đăng trực tiếp) và/hoặc `video.upload` (gửi nháp), thêm `user.info.basic` để lấy tên/avatar.
 5. Copy **Client Key** / **Client Secret** vào tab Cài đặt → **Kết nối TikTok**.
 
@@ -21,22 +22,39 @@
 > [Privacy Policy](./privacy.html) và Redirect URI. Bật GitHub Pages cho thư mục
 > `/docs` là có đủ cả bốn.
 
-## 2. Redirect URI: TikTok bắt buộc https
+## 2. Redirect URI: Sandbox nhận http, production đòi https
 
-Nếu bạn thấy lỗi này ở màn hình cấp quyền:
+**Đang phát triển (app ở chế độ Sandbox):** dán thẳng URL web admin hiển thị,
+ví dụ `http://127.0.0.1:4000/oauth/tiktok/callback`, vào cả hai chỗ:
+
+1. **Login Kit → Redirect URI** trong app TikTok
+2. Web admin: tab **Cài đặt** → TikTok → ô **Redirect URI** (hoặc để trống, app
+   tự suy ra từ địa chỉ bạn đang mở)
+
+Sandbox nhận `http` và loopback, nên không cần gì thêm. App cũng không tự chặn
+theo scheme — nền tảng tự quyết định.
+
+**Khi chuyển sang production:** TikTok áp lại quy định của Login Kit —
+*"URIs must be absolute and begin with `https`"*, **không có ngoại lệ cho
+loopback** (khác Google, vốn cho phép `http://127.0.0.1` với ứng dụng desktop).
+Lúc đó dùng trang cầu nối ở phần dưới.
+
+### Triệu chứng khi scheme không được chấp nhận
 
 > *We couldn't log in with TikTok. This may be due to specific app settings.*
 > *If you're a developer, correct the following and try again:* **redirect_uri**
 
-thì gần như chắc chắn bạn đã đăng ký `http://127.0.0.1:4000/oauth/tiktok/callback`.
-TikTok không nhận: tài liệu Login Kit ghi rõ *"URIs must be absolute and begin with
-`https`"*, và **không có ngoại lệ cho loopback** — khác Google, vốn cho phép
-`http://127.0.0.1` với ứng dụng desktop.
+Gặp lỗi này thì kiểm tra hai thứ, theo thứ tự:
 
-TikTok cũng không hỗ trợ device code flow, nên cách duy nhất là cho TikTok
-redirect tới một **trang https**, rồi trang đó chuyển tiếp về máy bạn.
+1. **Hai chỗ có khớp nhau từng ký tự không** — kể cả cổng và dấu `/` cuối. Đây
+   là nguyên nhân phổ biến nhất, kể cả trong Sandbox.
+2. **App còn ở Sandbox không** — nếu đã chuyển sang production thì `http` không
+   còn dùng được, phải đổi sang trang cầu nối https.
 
-### Cách làm: trang cầu nối
+### Trang cầu nối https (cho production)
+
+TikTok không hỗ trợ device code flow, nên với app production cách duy nhất là
+cho TikTok redirect tới một **trang https**, rồi trang đó chuyển tiếp về máy bạn.
 
 Repo có sẵn trang này: [`oauth-bridge/tiktok-callback.html`](./oauth-bridge/tiktok-callback.html).
 Nó nhận `code`/`state` từ TikTok rồi chuyển hướng về `http://127.0.0.1:4000/oauth/tiktok/callback`.
@@ -44,7 +62,7 @@ Trang không đọc, không lưu và không gửi `code` đi đâu khác — ch�
 string và redirect.
 
 Đưa nó lên bất kỳ host tĩnh https nào. Nhanh nhất là **GitHub Pages**, vốn cũng
-là nơi bạn cần để đặt Terms of Service / Privacy Policy:
+là nơi bạn cần để đặt trang giới thiệu / Terms of Service / Privacy Policy:
 
 1. Đẩy repo lên GitHub → **Settings → Pages** → Source: nhánh chính, thư mục `/docs`.
 2. Đợi vài phút, trang sẽ có ở
@@ -187,7 +205,7 @@ Access token sống 24h, refresh token 365 ngày. Module lưu refresh token mớ
 
 | `error.code` / `fail_reason` | Cách sửa |
 |---|---|
-| `unaudited_client_can_only_post_to_private_accounts` | Đặt `SELF_ONLY` hoặc dùng `MEDIA_UPLOAD` |
+| `unaudited_client_can_only_post_to_private_accounts` | Cần **cả hai**: `privacy_level=SELF_ONLY` và tài khoản TikTok đang ở chế độ private. Vào TikTok → Settings → Privacy → bật *Private account*. Hoặc dùng `MEDIA_UPLOAD` (gửi nháp) để tự đăng công khai |
 | `privacy_level_option_mismatch` | Giá trị không có trong `privacy_level_options` |
 | `url_ownership_unverified` | Xác minh domain trong app (bắt buộc cho ảnh) |
 | `spam_risk_too_many_posts` | Creator vượt ~15 bài/24h |
@@ -198,7 +216,8 @@ Access token sống 24h, refresh token 365 ngày. Module lưu refresh token mớ
 | `picture_size_check_failed` | Ảnh vượt 1080p |
 | `spam_risk_text` | Caption bị coi là spam — bớt hashtag/link |
 | `video_pull_failed` | URL không https / redirect / đã hết hiệu lực |
-| `redirect_uri` (ở màn hình cấp quyền) | Redirect URI phải là https — xem [mục 2](#2-redirect-uri-tiktok-bắt-buộc-https) |
+| `redirect_uri` (ở màn hình cấp quyền) | Hai chỗ đăng ký không khớp, hoặc app production dùng http — xem [mục 2](#2-redirect-uri-sandbox-nhận-http-production-đòi-https) |
+| `invalid_request` *The request parameters are malformed* (lúc đổi code lấy token) | Client Key/Secret dính khoảng trắng khi copy → lưu lại trong tab Cài đặt; hoặc `redirect_uri` lúc đổi token khác lúc authorize. Thông báo lỗi in ra cả hai giá trị để đối chiếu |
 
 ---
 
