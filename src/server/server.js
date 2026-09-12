@@ -32,6 +32,10 @@ import { Workspace, publicChannel, DEFAULT_SETTINGS } from '../core/store/worksp
 import { PublishService } from '../core/publishservice.js';
 import { PostScheduler, nextSlots } from '../core/scheduler.js';
 import { OAuthManager, OAUTH_PROVIDERS, connectTelegram } from '../auth/oauth.js';
+import {
+  UserService, publicUser, isAdmin, canUseChannel, assertCanPublishPost,
+  generatePassword, ROLES, SESSION_TTL_MS,
+} from '../auth/users.js';
 import { capabilitiesTable, PLATFORM_REGISTRY } from '../platforms/index.js';
 import { createLogger } from '../core/logger.js';
 import { toSocialPostError } from '../core/errors.js';
@@ -92,6 +96,25 @@ export async function createAdminServer(opts = {}) {
       note: 'Bi ngat giua luc dang (server khoi dong lai). Kiem tra tren nen tang truoc khi dang lai de tranh trung.',
     });
   }
+  const users = new UserService({
+    users: workspace.users,
+    sessions: workspace.sessions,
+    audit: workspace.audit,
+    logger,
+  });
+
+  // Lan dau chay chua co ai -> tao admin va in mat khau ra console mot lan.
+  const firstAdmin = await users.ensureFirstAdmin();
+  if (firstAdmin) {
+    // In mot lan duy nhat. Khong luu lai o dau - lan sau khong doc lai duoc.
+    logger.warn('======================================================');
+    logger.warn('Da tao tai khoan admin dau tien cho he thong:');
+    logger.warn(`  username: ${firstAdmin.user.username}`);
+    logger.warn(`  password: ${firstAdmin.password}`);
+    logger.warn('Doi mat khau ngay sau khi dang nhap lan dau.');
+    logger.warn('======================================================');
+  }
+
   const publisher = new PublishService({ workspace, logger, events });
   const scheduler = new PostScheduler({ workspace, publisher, logger, events });
   const oauth = new OAuthManager({
@@ -99,7 +122,7 @@ export async function createAdminServer(opts = {}) {
     logger,
   });
 
-  const router = buildRouter({ workspace, publisher, scheduler, oauth, events, logger, logLines, opts: { publicUrl: opts.publicUrl } });
+  const router = buildRouter({ workspace, publisher, scheduler, oauth, users, events, logger, logLines, opts: { publicUrl: opts.publicUrl } });
 
   const server = http.createServer(async (req, res) => {
     const started = Date.now();
@@ -135,9 +158,23 @@ export async function createAdminServer(opts = {}) {
       }
 
       // ---- xac thuc ----
-      const needsAuth = Boolean(token);
-      const authed = !needsAuth || isAuthorized(req, url, token);
-      const isPublicPath = url.pathname === '/api/session' || url.pathname === '/login' || url.pathname.startsWith('/assets/') || url.pathname === '/';
+      // Moi request deu phai co nguoi dung dang sau. WAM_ADMIN_TOKEN van dung
+      // duoc nhu bearer cua admin (cho CLI/script), nhung nguoi that thi dang
+      // nhap bang tai khoan rieng de audit log biet ai lam gi.
+      const sessionToken = readSessionToken(req);
+      let currentUser = sessionToken ? await users.userForSession(sessionToken) : null;
+      if (!currentUser && token && isBearerAdminToken(req, token)) {
+        currentUser = { id: 'admin-token', username: 'admin-token', role: 'admin', canPublish: true, enabled: true };
+      }
+      const needsAuth = true;
+      const authed = Boolean(currentUser);
+      const isPublicPath = url.pathname === '/api/session'
+        || url.pathname === '/login'
+        || url.pathname.startsWith('/assets/')
+        || url.pathname === '/'
+        // Callback OAuth: xac thuc bang `state`, khong bang phien dang nhap.
+        // Cookie SameSite khong theo dieu huong cross-site tu nen tang ve day.
+        || url.pathname.startsWith('/oauth/');
 
       if (needsAuth && !authed && !isPublicPath) {
         if (url.pathname.startsWith('/api/')) {
@@ -161,6 +198,9 @@ export async function createAdminServer(opts = {}) {
           authed,
           needsAuth,
           token,
+          user: currentUser,
+          sessionToken,
+          ip: clientIp(req),
         });
         if (out !== undefined && !res.writableEnded) {
           sendJson(res, out?.__status ?? 200, out?.__body ?? out);
@@ -231,7 +271,10 @@ export async function createAdminServer(opts = {}) {
     publisher,
     scheduler,
     events,
+    users,
     token,
+    // Chi co gia tri o lan chay dau tien (khi he thong chua co nguoi dung nao).
+    firstAdmin,
     url: `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`,
     async start() {
       await new Promise((resolve, reject) => {
@@ -242,7 +285,7 @@ export async function createAdminServer(opts = {}) {
       const actualPort = typeof addr === 'object' && addr ? addr.port : port;
       handle.url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${actualPort}`;
 
-      logger.info('admin server dang chay', { url: handle.url, auth: token ? 'co token' : 'khong (chi localhost)' });
+      logger.info('admin server dang chay', { url: handle.url, auth: 'dang nhap bang tai khoan', adminToken: token ? 'co (dung cho CLI)' : 'khong' });
       if (generatedToken) {
         logger.warn('server mo ra ngoai localhost nen da tu sinh token dang nhap', { token });
       }
@@ -261,6 +304,35 @@ export async function createAdminServer(opts = {}) {
 
 /**
  * Kiem tra token trong header Bearer, cookie, hoac query (cho link OAuth).
+ * @param {http.IncomingMessage} req
+ * @param {URL} url
+ * @param {string} token
+ */
+function readSessionToken(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  return cookies.wam_session ?? '';
+}
+
+/**
+ * WAM_ADMIN_TOKEN dung qua Authorization: Bearer - danh cho CLI va script.
+ * KHONG nhan qua cookie nua: nguoi that phai dang nhap bang tai khoan rieng,
+ * neu khong audit log khong biet ai lam gi.
+ *
+ * @param {http.IncomingMessage} req
+ * @param {string} token
+ */
+function isBearerAdminToken(req, token) {
+  const auth = req.headers.authorization;
+  return Boolean(auth?.startsWith('Bearer ') && safeEqual(auth.slice(7).trim(), token));
+}
+
+/** @param {http.IncomingMessage} req */
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+  return fwd || req.socket?.remoteAddress || undefined;
+}
+
+/**
  * @param {http.IncomingMessage} req
  * @param {URL} url
  * @param {string} token
@@ -314,7 +386,7 @@ function parseCookies(header) {
  * Dung toan bo route.
  */
 function buildRouter(deps) {
-  const { workspace, publisher, scheduler, oauth, events, logger, logLines, opts } = deps;
+  const { workspace, publisher, scheduler, oauth, users, events, logger, logLines, opts } = deps;
   const router = new Router();
 
   /** URL goc dung de dung redirect_uri cho OAuth. */
@@ -344,31 +416,142 @@ function buildRouter(deps) {
   // ------------------------------------------------------------------ session
 
   router.get('/api/session', async (ctx) => ({
-    authRequired: ctx.needsAuth,
+    authRequired: true,
     authed: ctx.authed,
+    user: publicUser(ctx.user),
     version: '1.0.0',
   }));
 
+  /** Dang nhap bang tai khoan rieng cua nhan vien. */
   router.post('/api/session', async (ctx) => {
     const body = await readJsonBody(ctx.req);
-    if (!ctx.needsAuth) return { ok: true, authed: true };
-    if (!safeEqual(String(body.token ?? ''), ctx.token)) {
-      throw new HttpError(401, 'Token khong dung');
+    let result;
+    try {
+      result = await users.login(String(body.username ?? ''), String(body.password ?? ''));
+    } catch (err) {
+      await users.log({
+        action: 'auth.login',
+        result: 'fail',
+        detail: `username='${String(body.username ?? '').slice(0, 60)}'`,
+        ip: ctx.ip,
+      });
+      throw new HttpError(401, /** @type {any} */ (err)?.message ?? 'Dang nhap that bai');
     }
+    await users.log({ actor: result.user, action: 'auth.login', ip: ctx.ip });
+    logger.info('dang nhap', { username: result.user.username, role: result.user.role });
+
     ctx.res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
-      'set-cookie': `wam_token=${encodeURIComponent(ctx.token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 3600}`
+      'set-cookie': `wam_session=${encodeURIComponent(result.token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`
         + (isHttps(ctx.req) ? '; Secure' : ''),
     });
-    ctx.res.end(JSON.stringify({ ok: true, authed: true }));
+    ctx.res.end(JSON.stringify({ ok: true, authed: true, user: publicUser(result.user) }));
   });
 
   router.delete('/api/session', async (ctx) => {
+    if (ctx.sessionToken) await users.logout(ctx.sessionToken);
+    if (ctx.user) await users.log({ actor: ctx.user, action: 'auth.logout', ip: ctx.ip });
     ctx.res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
-      'set-cookie': 'wam_token=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
+      'set-cookie': 'wam_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
     });
     ctx.res.end(JSON.stringify({ ok: true }));
+  });
+
+  /** Tu doi mat khau cua chinh minh. */
+  router.post('/api/session/password', async (ctx) => {
+    const body = await readJsonBody(ctx.req);
+    const me = await workspace.users.get(ctx.user.id);
+    if (!me) throw new HttpError(400, 'Tai khoan token khong doi duoc mat khau');
+    const { verifyPassword } = await import('../auth/users.js');
+    if (!verifyPassword(String(body.currentPassword ?? ''), me)) {
+      throw new HttpError(401, 'Mat khau hien tai khong dung');
+    }
+    await users.setPassword(me.id, String(body.newPassword ?? ''));
+    await users.log({ actor: me, action: 'auth.password_change', ip: ctx.ip });
+    // setPassword huy het phien -> client phai dang nhap lai.
+    ctx.res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'set-cookie': 'wam_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
+    });
+    ctx.res.end(JSON.stringify({ ok: true, mustLoginAgain: true }));
+  });
+
+  // -------------------------------------------------------------------- users
+
+  /** Chan route chi danh cho admin. */
+  const requireAdmin = (ctx) => {
+    if (!isAdmin(ctx.user)) throw new HttpError(403, 'Chi admin lam duoc viec nay');
+  };
+
+  /** Chan truy cap mot kenh chua duoc cap quyen. */
+  const requireChannel = (ctx, channelId) => {
+    if (!canUseChannel(ctx.user, channelId)) {
+      throw new HttpError(403, 'Tai khoan nay khong duoc cap quyen tren kenh do');
+    }
+  };
+
+  router.get('/api/users', async (ctx) => {
+    requireAdmin(ctx);
+    return { users: (await users.listUsers()).map(publicUser), roles: ROLES };
+  });
+
+  router.post('/api/users', async (ctx) => {
+    requireAdmin(ctx);
+    const body = await readJsonBody(ctx.req);
+    // Mat khau de trong -> sinh tu dong, tra ve DUNG MOT LAN de admin doc cho nhan vien.
+    const password = String(body.password ?? '') || generatePassword();
+    const created = await users.createUser({ ...body, password, mustChangePassword: true });
+    await users.log({
+      actor: ctx.user, action: 'user.create', targetUserId: created.id,
+      detail: `username='${created.username}' role=${created.role}`, ip: ctx.ip,
+    });
+    logger.info('tao nguoi dung', { username: created.username, role: created.role });
+    return { user: publicUser(created), password };
+  });
+
+  router.patch('/api/users/:id', async (ctx) => {
+    requireAdmin(ctx);
+    const body = await readJsonBody(ctx.req);
+    const updated = await users.updateUser(ctx.params.id, body);
+    await users.log({
+      actor: ctx.user, action: 'user.update', targetUserId: ctx.params.id,
+      detail: Object.keys(body).join(','), ip: ctx.ip,
+    });
+    return { user: publicUser(updated) };
+  });
+
+  router.post('/api/users/:id/password', async (ctx) => {
+    requireAdmin(ctx);
+    const body = await readJsonBody(ctx.req);
+    const password = String(body.password ?? '') || generatePassword();
+    await users.setPassword(ctx.params.id, password, { mustChangePassword: true });
+    await users.log({
+      actor: ctx.user, action: 'user.reset_password', targetUserId: ctx.params.id, ip: ctx.ip,
+    });
+    return { ok: true, password };
+  });
+
+  router.delete('/api/users/:id', async (ctx) => {
+    requireAdmin(ctx);
+    if (ctx.params.id === ctx.user.id) throw new HttpError(400, 'Khong the tu xoa chinh minh');
+    const ok = await users.removeUser(ctx.params.id);
+    if (!ok) throw new HttpError(404, 'Khong tim thay nguoi dung');
+    await users.log({ actor: ctx.user, action: 'user.delete', targetUserId: ctx.params.id, ip: ctx.ip });
+    return { ok: true };
+  });
+
+  // -------------------------------------------------------------------- audit
+
+  router.get('/api/audit', async (ctx) => {
+    requireAdmin(ctx);
+    return {
+      entries: await users.listAudit({
+        limit: parseIntParam(ctx.query.get('limit'), 200),
+        userId: ctx.query.get('userId') ?? undefined,
+        action: ctx.query.get('action') ?? undefined,
+      }),
+    };
   });
 
   // ------------------------------------------------------------------- state
@@ -379,8 +562,11 @@ function buildRouter(deps) {
       workspace.settings.read(),
       workspace.listPosts({ limit: 50 }),
     ]);
+    // Member chi thay kenh da duoc cap. Loc o SERVER, khong chi an tren UI.
+    const visible = channels.filter((c) => canUseChannel(ctx.user, c.id));
     return {
-      channels: channels.map(publicChannel),
+      me: publicUser(ctx.user),
+      channels: visible.map(publicChannel),
       platforms: capabilitiesTable().map((p) => ({
         ...p,
         limits: p.limits,
@@ -412,11 +598,14 @@ function buildRouter(deps) {
 
   // ----------------------------------------------------------------- channels
 
-  router.get('/api/channels', async () => ({
-    channels: (await workspace.listChannels()).map(publicChannel),
+  router.get('/api/channels', async (ctx) => ({
+    channels: (await workspace.listChannels())
+      .filter((c) => canUseChannel(ctx.user, c.id))
+      .map(publicChannel),
   }));
 
   router.patch('/api/channels/:id', async (ctx) => {
+    requireAdmin(ctx);
     const body = await readJsonBody(ctx.req);
     const channel = await workspace.channels.get(ctx.params.id);
     if (!channel) throw new HttpError(404, 'Khong tim thay kenh');
@@ -442,16 +631,31 @@ function buildRouter(deps) {
   });
 
   router.delete('/api/channels/:id', async (ctx) => {
+    requireAdmin(ctx);
+    const channel = await workspace.channels.get(ctx.params.id);
     const ok = await workspace.channels.remove(ctx.params.id);
     if (!ok) throw new HttpError(404, 'Khong tim thay kenh');
+    // Kenh khong con -> bo khoi quyen cua moi nguoi, khong de lai quyen treo.
+    await users.dropChannelFromAllUsers(ctx.params.id);
+    await users.log({
+      actor: ctx.user, action: 'channel.disconnect', channelId: ctx.params.id,
+      detail: channel ? `${channel.platform}: ${channel.name}` : undefined, ip: ctx.ip,
+    });
     logger.info('da ngat ket noi kenh', { channelId: ctx.params.id });
     events.emit('channels:changed', { removed: ctx.params.id });
     return { ok: true };
   });
 
-  router.post('/api/channels/verify', async () => ({ results: await publisher.verifyChannels() }));
+  router.post('/api/channels/verify', async (ctx) => {
+    const all = await publisher.verifyChannels();
+    /** @type {Record<string, any>} */
+    const mine = {};
+    for (const [id, res] of Object.entries(all)) if (canUseChannel(ctx.user, id)) mine[id] = res;
+    return { results: mine };
+  });
 
   router.post('/api/channels/:id/verify', async (ctx) => {
+    requireChannel(ctx, ctx.params.id);
     const results = await publisher.verifyChannels(ctx.params.id);
     return { result: results[ctx.params.id] ?? { ok: false, error: 'Khong tim thay kenh' } };
   });
@@ -461,6 +665,7 @@ function buildRouter(deps) {
    * yeu cau UX cua TikTok (privacy_level_options, comment/duet/stitch bi khoa).
    */
   router.get('/api/channels/:id/creator-info', async (ctx) => {
+    requireChannel(ctx, ctx.params.id);
     try {
       return { creatorInfo: await publisher.getCreatorInfo(ctx.params.id) };
     } catch (err) {
@@ -471,9 +676,14 @@ function buildRouter(deps) {
 
   /** Telegram khong co OAuth -> ket noi bang bot token. */
   router.post('/api/channels/telegram', async (ctx) => {
+    requireAdmin(ctx);
     const body = await readJsonBody(ctx.req);
     const draft = await connectTelegram({ botToken: body.botToken, chatId: body.chatId });
     const channel = await workspace.saveChannel(draft);
+    await users.log({
+      actor: ctx.user, action: 'channel.connect', channelId: channel.id,
+      detail: `telegram: ${channel.name}`, ip: ctx.ip,
+    });
     logger.info('da ket noi kenh Telegram', { name: channel.name });
     events.emit('channels:changed', { added: channel.id });
     return { channel: publicChannel(channel) };
@@ -482,10 +692,14 @@ function buildRouter(deps) {
   // -------------------------------------------------------------------- oauth
 
   router.post('/api/oauth/:provider/start', async (ctx) => {
+    // Chi admin ket noi kenh: day chinh la rao chan de nhan vien khong tu them
+    // tai khoan ngoai danh sach cong ty so huu.
+    requireAdmin(ctx);
     const provider = ctx.params.provider;
     const { url } = await oauth.createAuthUrl(provider, {
       redirectUri: await redirectUriFor(ctx, provider),
       returnTo: '/#channels',
+      actor: { id: ctx.user.id, username: ctx.user.username },
     });
     logger.info('bat dau ket noi OAuth', { provider });
     return { url };
@@ -510,6 +724,14 @@ function buildRouter(deps) {
       for (const draft of result.channels) {
         const channel = await workspace.saveChannel(draft);
         names.push(`${channel.platform}: ${channel.name}`);
+        await users.log({
+          // Route callback la public -> lay actor tu luc bam "Ket noi".
+          actor: result.actor ?? ctx.user,
+          action: 'channel.connect',
+          channelId: channel.id,
+          detail: `${channel.platform}: ${channel.name}`,
+          ip: ctx.ip,
+        });
       }
       logger.info('da ket noi kenh qua OAuth', { provider: result.provider, channels: names });
       events.emit('channels:changed', { provider: result.provider, count: names.length });
@@ -657,6 +879,18 @@ function buildRouter(deps) {
   });
 
   router.post('/api/posts/:id/publish', async (ctx) => {
+    const target = await workspace.posts.get(ctx.params.id);
+    if (!target) throw new HttpError(404, 'Khong tim thay bai dang');
+
+    // Rao chan that: khong dua vao UI. Kiem tra tung kenh trong bai.
+    const allowed = assertCanPublishPost(ctx.user, target.channelIds ?? []);
+    if (!allowed.ok) {
+      await users.log({
+        actor: ctx.user, action: 'post.publish', postId: ctx.params.id, result: 'fail',
+        detail: `bi tu choi: ${allowed.denied.join(', ')}`, ip: ctx.ip,
+      });
+      throw new HttpError(403, allowed.reason, { details: { denied: allowed.denied } });
+    }
     const body = await readJsonBody(ctx.req).catch(() => ({}));
     const existing = await workspace.posts.get(ctx.params.id);
     if (!existing) throw new HttpError(404, 'Khong tim thay bai dang');
@@ -668,6 +902,21 @@ function buildRouter(deps) {
       throw new HttpError(409, 'Bai nay da dang thanh cong roi. Dung "Nhan ban" neu muon dang lai.');
     }
     const { post, report } = await publisher.publishPost(ctx.params.id, { dryRun: Boolean(body.dryRun) });
+
+    // Audit log theo TUNG kenh - cau hoi cua auditor luon la ai dang gi len dau.
+    if (!body.dryRun) {
+      for (const r of report.results ?? []) {
+        await users.log({
+          actor: ctx.user,
+          action: 'post.publish',
+          postId: ctx.params.id,
+          channelId: r.channel ?? r.platform,
+          result: r.ok && !r.skipped ? 'ok' : 'fail',
+          detail: r.ok ? (r.url ?? r.status ?? undefined) : (r.error?.message ?? r.error ?? undefined),
+          ip: ctx.ip,
+        });
+      }
+    }
     events.emit('posts:changed', { updated: ctx.params.id });
     return { post, report };
   });
@@ -758,6 +1007,7 @@ function buildRouter(deps) {
   router.get('/api/settings', async () => ({ settings: redactSettings(await workspace.settings.read()) }));
 
   router.put('/api/settings', async (ctx) => {
+    requireAdmin(ctx);
     const body = await readJsonBody(ctx.req);
     /** @type {Record<string, any>} */
     const patch = {};

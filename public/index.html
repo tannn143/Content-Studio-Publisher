@@ -13,12 +13,13 @@
     <form class="login-card" id="login-form">
       <div class="login-logo">🚀</div>
       <h1>Wallpaper Studio Publisher</h1>
-      <p class="muted">Enter your admin token to continue.</p>
-      <input type="password" id="login-token" placeholder="Admin token" autocomplete="current-password" required />
+      <p class="muted">Sign in with your company account.</p>
+      <input type="text" id="login-username" placeholder="Username" autocomplete="username" required />
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
       <button type="submit" class="btn btn-primary btn-block">Sign in</button>
       <p class="login-hint muted">
-        The token is printed to the console when the server starts, or you can set it
-        with the <code>WAM_ADMIN_TOKEN</code> environment variable.
+        Ask your administrator for an account. The first administrator account and its
+        password are printed to the server console the first time the server starts.
       </p>
       <div id="login-error" class="alert alert-error hidden"></div>
     </form>
@@ -41,7 +42,9 @@
         <button class="nav-item" data-view="queue"><span>🗓️</span> Queue <span class="badge" id="badge-queue">0</span></button>
         <button class="nav-item" data-view="channels"><span>🔗</span> Channels <span class="badge" id="badge-channels">0</span></button>
         <button class="nav-item" data-view="history"><span>📜</span> History</button>
-        <button class="nav-item" data-view="settings"><span>⚙️</span> Settings</button>
+        <button class="nav-item" data-view="team" data-admin-only><span>👥</span> Team</button>
+        <button class="nav-item" data-view="audit" data-admin-only><span>🧾</span> Audit log</button>
+        <button class="nav-item" data-view="settings" data-admin-only><span>⚙️</span> Settings</button>
       </nav>
 
       <div class="sidebar-section">
@@ -53,8 +56,12 @@
       </div>
 
       <div class="sidebar-footer">
+        <div id="current-user" class="current-user"></div>
         <div id="scheduler-status" class="scheduler-status"></div>
-        <button class="link-btn" id="btn-logout">Sign out</button>
+        <div class="sidebar-footer-actions">
+          <button class="link-btn" id="btn-change-password">Change password</button>
+          <button class="link-btn" id="btn-logout">Sign out</button>
+        </div>
       </div>
     </aside>
 
@@ -227,6 +234,48 @@
           </div>
         </header>
         <div id="history-list" class="post-list"></div>
+      </section>
+
+      <!-- -------------------------------- Team -------------------------------- -->
+      <section class="view hidden" id="view-team">
+        <header class="view-head">
+          <div>
+            <h1>Team</h1>
+            <p class="muted">Give a colleague their own account and choose which TikTok accounts they may post to. Nobody ever receives the TikTok account password.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-primary" id="btn-add-user">Add team member</button>
+          </div>
+        </header>
+        <div id="user-list" class="user-list"></div>
+      </section>
+
+      <!-- ------------------------------ Audit log ------------------------------ -->
+      <section class="view hidden" id="view-audit">
+        <header class="view-head">
+          <div>
+            <h1>Audit log</h1>
+            <p class="muted">Who published what, to which account, and when. Also records sign-ins, account connections and permission changes.</p>
+          </div>
+          <div class="view-actions">
+            <select id="audit-filter">
+              <option value="">All activity</option>
+              <option value="post.publish">Publishing</option>
+              <option value="auth">Sign-in</option>
+              <option value="channel">Channel connections</option>
+              <option value="user">Permission changes</option>
+            </select>
+            <button class="btn" id="btn-refresh-audit">Refresh</button>
+          </div>
+        </header>
+        <div class="table-scroll">
+          <table class="audit-table">
+            <thead>
+              <tr><th>When</th><th>Who</th><th>Action</th><th>Account</th><th>Result</th><th>Detail</th></tr>
+            </thead>
+            <tbody id="audit-rows"></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- ------------------------------ Settings ------------------------------ -->

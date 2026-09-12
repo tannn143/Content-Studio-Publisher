@@ -121,6 +121,8 @@ export class OAuthManager {
    * @param {object} opts
    * @param {string} opts.redirectUri Phai khop chinh xac voi cai dang ky tren nen tang.
    * @param {string} [opts.returnTo]
+   * @param {{id: string, username: string}} [opts.actor] Nguoi bam "Ket noi" -
+   *   giu lai de callback ghi dung actor vao audit log.
    * @returns {Promise<{url: string, state: string}>}
    */
   async createAuthUrl(provider, opts) {
@@ -191,6 +193,7 @@ export class OAuthManager {
     this.pending.set(state, {
       provider,
       redirectUri: opts.redirectUri,
+      actor: opts.actor,
       codeVerifier,
       createdAt: Date.now(),
       returnTo: opts.returnTo,
@@ -222,7 +225,7 @@ export class OAuthManager {
         ? await this._connectFacebook(creds, opts.code, entry)
         : await this._connectTikTok(creds, opts.code, entry);
 
-    return { provider: entry.provider, channels, returnTo: entry.returnTo };
+    return { provider: entry.provider, channels, returnTo: entry.returnTo, actor: entry.actor };
   }
 
   // ------------------------------------------------------------------ google

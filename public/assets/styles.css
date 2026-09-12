@@ -482,3 +482,47 @@ select.needs-pick { border-color: var(--warn); }
 .tiktok-problem {
   margin: 0; color: var(--danger); font-size: 13.5px; line-height: 1.5;
 }
+
+/* --------------------------------------------------------- team & audit log */
+
+.current-user { font-size: 12.5px; padding: 0 6px 4px; }
+.current-user strong { display: block; }
+.sidebar-footer-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.user-list { display: flex; flex-direction: column; gap: 12px; }
+
+.user-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-card); padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.user-card.is-disabled { opacity: .6; }
+
+.user-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.user-card-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.user-card-actions select { width: auto; }
+
+.user-grants {
+  border-top: 1px solid var(--border-soft); padding-top: 10px;
+}
+.user-grants .checkbox { margin: 2px 0; }
+
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+
+.audit-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.audit-table th, .audit-table td {
+  border-bottom: 1px solid var(--border-soft); padding: 8px 10px;
+  text-align: left; vertical-align: top; white-space: nowrap;
+}
+.audit-table th { color: var(--text-dim); font-weight: 600; }
+.audit-table tr.audit-fail td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.audit-table .ok { color: var(--success); }
+.audit-table .fail { color: var(--danger); }
+.audit-detail {
+  white-space: normal; max-width: 380px; color: var(--text-dim);
+  overflow-wrap: anywhere;
+}

@@ -103,6 +103,12 @@ export class Workspace {
     this.media = new JsonCollection(path.join(this.dir, 'media.json'));
     /** @type {JsonDocument<typeof DEFAULT_SETTINGS>} */
     this.settings = new JsonDocument(path.join(this.dir, 'settings.json'), DEFAULT_SETTINGS);
+    /** @type {JsonCollection<any>} Nhan vien duoc cap quyen dung he thong. */
+    this.users = new JsonCollection(path.join(this.dir, 'users.json'));
+    /** @type {JsonCollection<any>} Phien dang nhap (luu hash cua token). */
+    this.sessions = new JsonCollection(path.join(this.dir, 'sessions.json'));
+    /** @type {JsonCollection<any>} Audit log: ai lam gi, luc nao. */
+    this.audit = new JsonCollection(path.join(this.dir, 'audit.json'));
     /** Token store cho access token (dung chung voi adapter). */
     this.tokensPath = path.join(this.dir, 'tokens.json');
   }

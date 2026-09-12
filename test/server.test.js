@@ -11,6 +11,18 @@ import { JsonCollection, JsonDocument, deepMerge, newId } from '../src/core/stor
 import { fakeJpeg, fakeMp4, createMockFetch } from './helpers.js';
 import { connectTelegram } from '../src/auth/oauth.js';
 
+/**
+ * Moi request gio deu can mot nguoi dung dang sau (xem src/auth/users.js).
+ * Cac test o day kiem tra hanh vi API chu khong phai dang nhap, nen dung
+ * bearer token cua admin cho gon.
+ */
+const ADMIN_TOKEN = 'test-admin-token';
+
+/** Them header Authorization vao init cua fetch. */
+function authed(init = {}) {
+  return { ...init, headers: { authorization: `Bearer ${ADMIN_TOKEN}`, ...(init.headers ?? {}) } };
+}
+
 /** Khoi dong server tren cong tu do trong thu muc tam. */
 async function withServer(fn, opts = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-test-'));
@@ -20,6 +32,9 @@ async function withServer(fn, opts = {}) {
     dataDir: dir,
     logLevel: 'silent',
     startScheduler: false,
+    // Moi request gio deu can mot nguoi dung. Test kiem tra hanh vi API chu
+    // khong phai dang nhap, nen dung bearer token cua admin cho gon.
+    token: ADMIN_TOKEN,
     ...opts,
   });
   await handle.start();
@@ -251,11 +266,11 @@ test('API: bat buoc token khi co cau hinh token', async () => {
 test('API: upload media nhan dang mime, tu choi file khong phai anh/video', async () => {
   await withServer(async ({ call, base }) => {
     const jpeg = fakeJpeg(4096);
-    const up = await fetch(`${base}/api/media`, {
+    const up = await fetch(`${base}/api/media`, authed({
       method: 'POST',
       headers: { 'x-filename': 'wallpaper.jpg', 'content-type': 'image/jpeg' },
       body: jpeg,
-    });
+    }));
     const { media } = await up.json();
     assert.equal(up.status, 200);
     assert.equal(media.mime, 'image/jpeg');
@@ -264,16 +279,16 @@ test('API: upload media nhan dang mime, tu choi file khong phai anh/video', asyn
     assert.match(media.url, /^\/api\/media\/m_[a-z0-9]+\/file$/);
 
     // Tai lai file da upload
-    const file = await fetch(`${base}${media.url}`);
+    const file = await fetch(`${base}${media.url}`, authed());
     assert.equal(file.status, 200);
     assert.equal(file.headers.get('content-type'), 'image/jpeg');
 
     // File khong phai media -> tu choi
-    const bad = await fetch(`${base}/api/media`, {
+    const bad = await fetch(`${base}/api/media`, authed({
       method: 'POST',
       headers: { 'x-filename': 'a.txt' },
       body: Buffer.from('day khong phai anh'),
-    });
+    }));
     assert.equal(bad.status, 400);
 
     const list = await call('/api/media');
@@ -298,11 +313,11 @@ test('API: tao bai, kiem tra input, xem truoc, dang thu (dry-run)', async () => 
     assert.equal(empty.status, 400);
 
     // Upload 1 anh doc 9:16 (IG feed se bao loi ty le)
-    const up = await fetch(`${base}/api/media`, {
+    const up = await fetch(`${base}/api/media`, authed({
       method: 'POST',
       headers: { 'x-filename': 'tall.jpg', 'content-type': 'image/jpeg' },
       body: fakeJpeg(2048),
-    });
+    }));
     const { media } = await up.json();
     // Gan kich thuoc doc de kiem tra canh bao ty le.
     await handle.workspace.media.update(media.id, { width: 1080, height: 1920 });
@@ -559,7 +574,7 @@ test('API: phuc vu UI tinh', async () => {
 test('API: SSE gui su kien ve client', async () => {
   await withServer(async ({ base, handle }) => {
     const controller = new AbortController();
-    const res = await fetch(`${base}/api/events`, { signal: controller.signal });
+    const res = await fetch(`${base}/api/events`, authed({ signal: controller.signal }));
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /text\/event-stream/);
 
@@ -979,5 +994,231 @@ test('API: mac dinh audited = false (app moi luon chua audit)', async () => {
   await withServer(async ({ call }) => {
     const { data } = await call('/api/settings');
     assert.equal(data.settings.credentials.tiktok.audited, false);
+  });
+});
+
+// ====================================== nguoi dung, phan quyen va audit log
+
+/** Dang nhap, tra ve ham goi API mang theo cookie phien cua nguoi do. */
+async function loginAs(base, username, password) {
+  const res = await fetch(`${base}/api/session`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const cookie = res.headers.get('set-cookie')?.split(';')[0] ?? '';
+  const body = await res.json().catch(() => ({}));
+  const call = async (p, init = {}) => {
+    const r = await fetch(`${base}${p}`, {
+      ...init,
+      headers: {
+        ...(init.body && typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
+        cookie,
+        ...(init.headers ?? {}),
+      },
+    });
+    const text = await r.text();
+    let data;
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+    return { status: r.status, data };
+  };
+  return { status: res.status, cookie, user: body.user, call };
+}
+
+/** Tao admin + mot nhan vien, tra ve ca hai kem mot kenh de cap quyen. */
+async function seedTeam(handle, call) {
+  const channel = await handle.workspace.saveChannel({
+    platform: 'tiktok', name: 'Brand VN', externalId: 'open_a',
+    config: { clientKey: 'k', clientSecret: 's', refreshToken: 'r' },
+  });
+  const other = await handle.workspace.saveChannel({
+    platform: 'tiktok', name: 'Brand EN', externalId: 'open_b',
+    config: { clientKey: 'k', clientSecret: 's', refreshToken: 'r' },
+  });
+  const created = await call('/api/users', {
+    method: 'POST',
+    body: JSON.stringify({ username: 'nhanvien', displayName: 'Nhan Vien', role: 'member', canPublish: true }),
+  });
+  return { channel, other, member: created.data.user, password: created.data.password };
+}
+
+test('users: lan dau chay tu tao admin va in mat khau mot lan', async () => {
+  await withServer(async ({ handle, base }) => {
+    assert.ok(handle.firstAdmin, 'phai tao admin dau tien');
+    assert.equal(handle.firstAdmin.user.username, 'admin');
+    assert.ok(handle.firstAdmin.password.length >= 10);
+
+    const ok = await loginAs(base, 'admin', handle.firstAdmin.password);
+    assert.equal(ok.status, 200);
+    assert.equal(ok.user.role, 'admin');
+
+    const bad = await loginAs(base, 'admin', 'sai-mat-khau');
+    assert.equal(bad.status, 401);
+  });
+});
+
+test('users: mat khau khong bao gio ra khoi server', async () => {
+  await withServer(async ({ call, handle }) => {
+    await seedTeam(handle, call);
+    const { data } = await call('/api/users');
+    const raw = JSON.stringify(data);
+    assert.equal(raw.includes('hash'), false, 'khong duoc lo hash');
+    assert.equal(raw.includes('salt'), false, 'khong duoc lo salt');
+  });
+});
+
+test('phan quyen: member chi THAY kenh duoc cap', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { channel, member, password } = await seedTeam(handle, call);
+    await call(`/api/users/${member.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ channelIds: [channel.id] }),
+    });
+
+    const nv = await loginAs(base, 'nhanvien', password);
+    const state = await nv.call('/api/state');
+    assert.equal(state.status, 200);
+    assert.equal(state.data.channels.length, 1, 'chi thay 1 trong 2 kenh');
+    assert.equal(state.data.channels[0].id, channel.id);
+    assert.equal(state.data.me.role, 'member');
+  });
+});
+
+test('phan quyen: member KHONG dang duoc len kenh chua duoc cap', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { channel, other, member, password } = await seedTeam(handle, call);
+    await call(`/api/users/${member.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ channelIds: [channel.id] }),
+    });
+
+    // Bai nham vao kenh KHONG duoc cap - tao bang admin de chac chan bai ton tai.
+    const post = await handle.workspace.createPost({
+      content: { title: 'x', description: 'y', hashtags: [] },
+      channelIds: [other.id],
+      status: 'draft',
+    });
+
+    const nv = await loginAs(base, 'nhanvien', password);
+    const res = await nv.call(`/api/posts/${post.id}/publish`, { method: 'POST', body: '{}' });
+    assert.equal(res.status, 403, 'server phai chan, khong chi an tren UI');
+    assert.match(String(res.data.error), /khong duoc cap quyen/i);
+  });
+});
+
+test('phan quyen: khong co canPublish thi soan duoc nhung khong dang duoc', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { channel, member, password } = await seedTeam(handle, call);
+    await call(`/api/users/${member.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ channelIds: [channel.id], canPublish: false }),
+    });
+
+    const nv = await loginAs(base, 'nhanvien', password);
+    // Van soan va luu nhap duoc.
+    const draft = await nv.call('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'nhap', description: 'd', channelIds: [channel.id] }),
+    });
+    assert.equal(draft.status, 200);
+
+    const res = await nv.call(`/api/posts/${draft.data.post.id}/publish`, { method: 'POST', body: '{}' });
+    assert.equal(res.status, 403);
+    assert.match(String(res.data.error), /chi duoc soan bai/i);
+  });
+});
+
+test('phan quyen: member khong dung duoc route cua admin', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { member, password } = await seedTeam(handle, call);
+    const nv = await loginAs(base, 'nhanvien', password);
+
+    for (const [p, init] of [
+      ['/api/users', {}],
+      ['/api/audit', {}],
+      ['/api/oauth/tiktok/start', { method: 'POST', body: '{}' }],
+      ['/api/settings', { method: 'PUT', body: '{}' }],
+    ]) {
+      const res = await nv.call(p, init);
+      assert.equal(res.status, 403, `${p} phai tra 403 voi member`);
+    }
+    // Tu sua quyen cua chinh minh cung khong duoc.
+    const self = await nv.call(`/api/users/${member.id}`, {
+      method: 'PATCH', body: JSON.stringify({ role: 'admin' }),
+    });
+    assert.equal(self.status, 403);
+  });
+});
+
+test('phan quyen: tat tai khoan la dang xuat ngay lap tuc', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { member, password } = await seedTeam(handle, call);
+    const nv = await loginAs(base, 'nhanvien', password);
+    assert.equal((await nv.call('/api/state')).status, 200);
+
+    await call(`/api/users/${member.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: false }) });
+
+    assert.equal((await nv.call('/api/state')).status, 401, 'phien cu phai chet ngay');
+  });
+});
+
+test('phan quyen: khong the ha quyen admin cuoi cung', async () => {
+  await withServer(async ({ call, handle }) => {
+    const admins = (await handle.workspace.users.all()).filter((u) => u.role === 'admin');
+    assert.equal(admins.length, 1);
+    const res = await call(`/api/users/${admins[0].id}`, {
+      method: 'PATCH', body: JSON.stringify({ role: 'member' }),
+    });
+    assert.notEqual(res.status, 200, 'phai tu choi');
+  });
+});
+
+test('phan quyen: ngat kenh thi go luon khoi quyen cua moi nguoi', async () => {
+  await withServer(async ({ call, handle }) => {
+    const { channel, member } = await seedTeam(handle, call);
+    await call(`/api/users/${member.id}`, {
+      method: 'PATCH', body: JSON.stringify({ channelIds: [channel.id] }),
+    });
+
+    await call(`/api/channels/${channel.id}`, { method: 'DELETE' });
+
+    const after = await handle.workspace.users.get(member.id);
+    assert.deepEqual(after.channelIds, [], 'khong de lai quyen treo tren kenh da xoa');
+  });
+});
+
+test('audit log: ghi lai dang nhap, tao nguoi dung va doi quyen', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { channel, member, password } = await seedTeam(handle, call);
+    await call(`/api/users/${member.id}`, {
+      method: 'PATCH', body: JSON.stringify({ channelIds: [channel.id] }),
+    });
+    await loginAs(base, 'nhanvien', password);
+
+    const { data } = await call('/api/audit');
+    const actions = data.entries.map((e) => e.action);
+    assert.ok(actions.includes('user.create'), 'phai ghi viec tao nguoi dung');
+    assert.ok(actions.includes('user.update'), 'phai ghi viec doi quyen');
+    assert.ok(actions.includes('auth.login'), 'phai ghi viec dang nhap');
+
+    const login = data.entries.find((e) => e.action === 'auth.login' && e.username === 'nhanvien');
+    assert.ok(login, 'phai biet AI dang nhap');
+    assert.ok(login.at, 'phai biet LUC NAO');
+  });
+});
+
+test('audit log: ghi ca lan dang bi tu choi vi thieu quyen', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { other, member, password } = await seedTeam(handle, call);
+    const post = await handle.workspace.createPost({
+      content: { title: 'x' }, channelIds: [other.id], status: 'draft',
+    });
+    const nv = await loginAs(base, 'nhanvien', password);
+    await nv.call(`/api/posts/${post.id}/publish`, { method: 'POST', body: '{}' });
+
+    const { data } = await call('/api/audit?action=post.publish');
+    const denied = data.entries.find((e) => e.result === 'fail');
+    assert.ok(denied, 'lan bi tu choi cung phai vao log');
+    assert.equal(denied.username, 'nhanvien');
   });
 });

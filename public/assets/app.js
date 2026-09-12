@@ -19,6 +19,9 @@ const state = {
   hashtags: [],
   perChannel: {},        // { channelId: {title, description, hashtags, ...options} }
   creatorInfo: {},       // { channelId: {status, data, error} } - creator_info cua TikTok
+  me: null,              // nguoi dang dang nhap (publicUser)
+  users: [],             // danh sach nhan vien (chi admin doc duoc)
+  audit: [],             // audit log (chi admin doc duoc)
   activeTab: null,
   editingPostId: null,
   previewTimer: null,
@@ -28,7 +31,14 @@ const state = {
 };
 
 /** Cac view hop le (dung cho dieu huong bang hash). */
-const VIEWS = ['composer', 'queue', 'channels', 'history', 'settings'];
+const VIEWS = ['composer', 'queue', 'channels', 'history', 'team', 'audit', 'settings'];
+
+/** View chi danh cho admin. Server van tu chan API - day chi la tien nghi. */
+const ADMIN_VIEWS = new Set(['team', 'audit', 'settings']);
+
+function isAdminUser() {
+  return state.me?.role === 'admin';
+}
 
 const PLATFORM_ICON = {
   youtube: '▶️',
@@ -216,7 +226,13 @@ function showLogin() {
     const errBox = $('#login-error');
     errBox.classList.add('hidden');
     try {
-      await api('/api/session', { method: 'POST', body: { token: $('#login-token').value } });
+      await api('/api/session', {
+        method: 'POST',
+        body: {
+          username: $('#login-username').value.trim(),
+          password: $('#login-password').value,
+        },
+      });
       location.reload();
     } catch (err) {
       errBox.textContent = err.message;
@@ -243,6 +259,8 @@ async function refreshState() {
   state.settings = data.settings;
   state.posts = data.posts;
   state.scheduler = data.scheduler;
+  state.me = data.me ?? state.me;
+  renderCurrentUser();
 
   // Bo cac kenh da bi xoa khoi lua chon hien tai.
   const ids = new Set(state.channels.map((c) => c.id));
@@ -263,6 +281,8 @@ async function refreshState() {
 // ============================================================ điều hướng
 
 function setView(view) {
+  // Vao thang bang hash cung khong duoc: quay ve Compose.
+  if (ADMIN_VIEWS.has(view) && !isAdminUser()) view = 'composer';
   state.view = view;
   location.hash = view;
   $$('.view').forEach((v) => v.classList.add('hidden'));
@@ -270,6 +290,8 @@ function setView(view) {
   $$('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   if (view === 'queue' || view === 'history') void reloadPosts();
   if (view === 'channels') renderChannelCards();
+  if (view === 'team') void reloadUsers();
+  if (view === 'audit') void reloadAudit();
 }
 
 function bindUI() {
@@ -284,6 +306,11 @@ function bindUI() {
     e.preventDefault();
     setView(a.dataset.viewLink);
   }));
+
+  $('#btn-change-password').onclick = changeOwnPassword;
+  $('#btn-add-user').onclick = addTeamMember;
+  $('#btn-refresh-audit').onclick = () => void reloadAudit();
+  $('#audit-filter').onchange = () => void reloadAudit();
 
   $('#btn-logout').onclick = async () => {
     await api('/api/session', { method: 'DELETE' }).catch(() => {});
@@ -1622,6 +1649,236 @@ async function loadIntoComposer(post) {
   setView('composer');
   void refreshPreview();
   toast('Post loaded into the composer.', { type: 'info' });
+}
+
+// ============================================================ nguoi dung
+
+/** Hien ten nguoi dang dang nhap va an cac muc chi danh cho admin. */
+function renderCurrentUser() {
+  const box = clear($('#current-user'));
+  const me = state.me;
+  if (!me) return;
+  box.append(
+    el('strong', {}, me.displayName || me.username),
+    el('small', { class: 'muted' }, me.role === 'admin' ? ' · Administrator' : ' · Team member'),
+  );
+  // An nav admin. Day chi la tien nghi - server van tu chan moi API.
+  $$('[data-admin-only]').forEach((nodeEl) => {
+    nodeEl.classList.toggle('hidden', !isAdminUser());
+  });
+  if (me.mustChangePassword) {
+    toast('Please change the password your administrator gave you.', {
+      type: 'warn', title: 'Set your own password', timeout: 12000,
+    });
+  }
+}
+
+async function changeOwnPassword() {
+  const currentPassword = prompt('Current password:');
+  if (!currentPassword) return;
+  const newPassword = prompt('New password (at least 10 characters):');
+  if (!newPassword) return;
+  try {
+    await api('/api/session/password', { method: 'POST', body: { currentPassword, newPassword } });
+    toast('Password changed. Please sign in again.', { type: 'success' });
+    setTimeout(() => location.reload(), 1500);
+  } catch (err) {
+    toast(err.message, { type: 'error', title: 'Could not change password' });
+  }
+}
+
+async function reloadUsers() {
+  if (!isAdminUser()) return;
+  try {
+    const { users } = await api('/api/users');
+    state.users = users;
+    renderTeam();
+  } catch (err) {
+    toast(err.message, { type: 'error', title: 'Could not load the team' });
+  }
+}
+
+async function addTeamMember() {
+  const username = prompt('Username for the new team member (letters, digits, . _ -):');
+  if (!username) return;
+  const displayName = prompt('Full name:') || username;
+  try {
+    const { user, password } = await api('/api/users', {
+      method: 'POST',
+      body: { username, displayName, role: 'member', canPublish: true, channelIds: [] },
+    });
+    state.users.push(user);
+    renderTeam();
+    // Mat khau chi hien DUNG MOT LAN - server khong luu ban ro.
+    openModal('Account created', el('div', {}, [
+      el('p', {}, `Give ${user.displayName} these details. This password is shown once and cannot be recovered.`),
+      el('pre', { class: 'preview-text' }, `username: ${user.username}\npassword: ${password}`),
+      el('p', { class: 'muted small' }, 'They will be asked to choose their own password after signing in. Grant them accounts below before they can publish.'),
+    ]));
+  } catch (err) {
+    toast(err.message, { type: 'error', title: 'Could not create the account' });
+  }
+}
+
+async function patchUser(id, patch) {
+  try {
+    const { user } = await api(`/api/users/${id}`, { method: 'PATCH', body: patch });
+    state.users = state.users.map((u) => (u.id === user.id ? user : u));
+    renderTeam();
+  } catch (err) {
+    toast(err.message, { type: 'error', title: 'Could not update this account' });
+    void reloadUsers();
+  }
+}
+
+function renderTeam() {
+  const box = clear($('#user-list'));
+  if (state.users.length === 0) {
+    box.append(el('p', { class: 'muted' }, 'No team members yet.'));
+    return;
+  }
+
+  for (const u of state.users) {
+    const isMe = u.id === state.me?.id;
+    const admin = u.role === 'admin';
+
+    const grants = admin
+      ? [el('p', { class: 'muted small' }, 'Administrators can publish to every connected account.')]
+      : state.channels.map((ch) => el('label', { class: 'checkbox' }, [
+        el('input', {
+          type: 'checkbox',
+          checked: (u.channelIds ?? []).includes(ch.id),
+          onchange: (e) => {
+            const next = new Set(u.channelIds ?? []);
+            if (e.target.checked) next.add(ch.id); else next.delete(ch.id);
+            void patchUser(u.id, { channelIds: [...next] });
+          },
+        }),
+        `${PLATFORM_ICON[ch.platform] ?? ''} ${ch.name}`,
+      ]));
+
+    if (!admin && state.channels.length === 0) {
+      grants.push(el('p', { class: 'muted small' }, 'No accounts connected yet — connect one on the Channels tab first.'));
+    }
+
+    box.append(el('div', { class: `user-card${u.enabled ? '' : ' is-disabled'}` }, [
+      el('div', { class: 'user-card-head' }, [
+        el('div', {}, [
+          el('strong', {}, u.displayName || u.username),
+          el('small', { class: 'muted' }, ` @${u.username}`),
+          isMe ? el('span', { class: 'pill' }, 'you') : null,
+          u.enabled ? null : el('span', { class: 'pill' }, 'disabled'),
+        ]),
+        el('div', { class: 'user-card-actions' }, [
+          el('select', {
+            onchange: (e) => void patchUser(u.id, { role: e.target.value }),
+            disabled: isMe,
+            title: isMe ? 'You cannot change your own role' : 'Role',
+          }, [
+            el('option', { value: 'member', selected: !admin }, 'Team member'),
+            el('option', { value: 'admin', selected: admin }, 'Administrator'),
+          ]),
+          el('button', {
+            class: 'btn btn-sm',
+            onclick: async () => {
+              if (!confirm(`Reset the password for "${u.username}"?`)) return;
+              try {
+                const { password } = await api(`/api/users/${u.id}/password`, { method: 'POST', body: {} });
+                openModal('New password', el('div', {}, [
+                  el('p', {}, `Give this to ${u.displayName}. It is shown once.`),
+                  el('pre', { class: 'preview-text' }, `username: ${u.username}\npassword: ${password}`),
+                ]));
+              } catch (err) {
+                toast(err.message, { type: 'error', title: 'Could not reset the password' });
+              }
+            },
+          }, 'Reset password'),
+          el('button', {
+            class: 'btn btn-sm',
+            disabled: isMe,
+            onclick: () => void patchUser(u.id, { enabled: !u.enabled }),
+          }, u.enabled ? 'Disable' : 'Enable'),
+          el('button', {
+            class: 'btn btn-sm btn-danger',
+            disabled: isMe,
+            onclick: async () => {
+              if (!confirm(`Remove "${u.username}"? They will be signed out immediately.`)) return;
+              try {
+                await api(`/api/users/${u.id}`, { method: 'DELETE' });
+                state.users = state.users.filter((x) => x.id !== u.id);
+                renderTeam();
+                toast('Team member removed.', { type: 'info' });
+              } catch (err) {
+                toast(err.message, { type: 'error', title: 'Could not remove this account' });
+              }
+            },
+          }, 'Remove'),
+        ]),
+      ]),
+      el('label', { class: 'checkbox' }, [
+        el('input', {
+          type: 'checkbox',
+          checked: u.canPublish,
+          disabled: admin,
+          onchange: (e) => void patchUser(u.id, { canPublish: e.target.checked }),
+        }),
+        'May publish',
+        el('small', { class: 'muted' }, ' — turn off to let them draft posts only'),
+      ]),
+      el('div', { class: 'user-grants' }, [
+        el('label', { class: 'field-label' }, 'Accounts this person may post to'),
+        ...grants,
+      ]),
+      u.lastLoginAt
+        ? el('p', { class: 'muted small' }, `Last signed in ${fmtRelative(u.lastLoginAt)}`)
+        : el('p', { class: 'muted small' }, 'Has not signed in yet'),
+    ]));
+  }
+}
+
+// ============================================================ audit log
+
+async function reloadAudit() {
+  if (!isAdminUser()) return;
+  const action = $('#audit-filter')?.value ?? '';
+  try {
+    const { entries } = await api(`/api/audit?limit=200${action ? `&action=${encodeURIComponent(action)}` : ''}`);
+    state.audit = entries;
+    renderAudit();
+  } catch (err) {
+    toast(err.message, { type: 'error', title: 'Could not load the audit log' });
+  }
+}
+
+const AUDIT_LABEL = {
+  'auth.login': 'Signed in',
+  'auth.logout': 'Signed out',
+  'auth.password_change': 'Changed password',
+  'post.publish': 'Published',
+  'channel.connect': 'Connected account',
+  'channel.disconnect': 'Disconnected account',
+  'user.create': 'Created team member',
+  'user.update': 'Changed permissions',
+  'user.delete': 'Removed team member',
+  'user.reset_password': 'Reset a password',
+};
+
+function renderAudit() {
+  const body = clear($('#audit-rows'));
+  if (state.audit.length === 0) {
+    body.append(el('tr', {}, [el('td', { colspan: '6', class: 'muted' }, 'Nothing recorded yet.')]));
+    return;
+  }
+  for (const row of state.audit) {
+    body.append(el('tr', { class: row.result === 'fail' ? 'audit-fail' : '' }, [
+      el('td', { title: row.at }, fmtRelative(row.at)),
+      el('td', {}, row.username ?? '—'),
+      el('td', {}, AUDIT_LABEL[row.action] ?? row.action),
+      el('td', {}, row.channelId ? channelName(row.channelId) : '—'),
+      el('td', {}, el('span', { class: row.result === 'fail' ? 'fail' : 'ok' }, row.result === 'fail' ? 'failed' : 'ok')),
+      el('td', { class: 'audit-detail', title: row.detail ?? '' }, row.detail ?? ''),
+    ]));
+  }
 }
 
 // ============================================================ channels view

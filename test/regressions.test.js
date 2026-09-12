@@ -19,6 +19,18 @@ import { toMedia } from '../src/core/media.js';
 import { JsonCollection } from '../src/core/store/jsonstore.js';
 import { SocialPoster } from '../src/core/poster.js';
 import { BasePlatform } from '../src/platforms/base.js';
+
+/**
+ * Moi request gio deu can mot nguoi dung dang sau (xem src/auth/users.js).
+ * Cac test o day kiem tra hanh vi HTTP chu khong phai dang nhap, nen dung
+ * bearer token cua admin cho gon.
+ */
+const ADMIN_TOKEN = 'test-admin-token';
+
+/** Them header Authorization vao init cua fetch. */
+function authed(init = {}) {
+  return { ...init, headers: { authorization: `Bearer ${ADMIN_TOKEN}`, ...(init.headers ?? {}) } };
+}
 import { TikTokPlatform } from '../src/platforms/tiktok.js';
 import { TelegramPlatform, splitAlbumGroups } from '../src/platforms/telegram.js';
 import { buildTitle } from '../src/platforms/youtube.js';
@@ -41,14 +53,14 @@ test('regression: Range "bytes=-0" khong lam sap server', () => {
 
 test('regression: Range "bytes=-0" tra ve 200 chu khong lam chet ket noi', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-range-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
-    const res = await fetch(`${handle.url}/assets/app.js`, { headers: { Range: 'bytes=-0' } });
+    const res = await fetch(`${handle.url}/assets/app.js`, authed({ headers: { Range: 'bytes=-0' } }));
     assert.equal(res.status, 200, 'phai tra ve ca file thay vi 206 khong hop le');
     await res.arrayBuffer();
     // Server phai con song
-    const health = await fetch(`${handle.url}/api/health`);
+    const health = await fetch(`${handle.url}/api/health`, authed());
     assert.equal(health.status, 200);
   } finally {
     await handle.close();
@@ -63,10 +75,10 @@ test('regression: safeJoin chiu duoc percent-escape sai', () => {
 
 test('regression: URL escape sai tra ve 400 chu khong phai 500', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-esc-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
-    const res = await fetch(`${handle.url}/api/media/100%/file`);
+    const res = await fetch(`${handle.url}/api/media/100%/file`, authed());
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.match(body.error, /escape/);
@@ -86,11 +98,11 @@ test('regression: parseIntParam khong tra ve NaN', () => {
 
 test('regression: limit khong hop le khong lam danh sach bai rong', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-lim-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
     await handle.workspace.createPost({ content: { title: 'a' } });
-    const res = await fetch(`${handle.url}/api/posts?limit=abc`);
+    const res = await fetch(`${handle.url}/api/posts?limit=abc`, authed());
     const body = await res.json();
     assert.equal(body.posts.length, 1, 'limit sai phai dung mac dinh, khong tra ve rong');
   } finally {
@@ -103,19 +115,19 @@ test('regression: limit khong hop le khong lam danh sach bai rong', async () => 
 
 test('regression: media tai len khong duoc chay nhu HTML tren origin admin', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-xss-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
     // Upload anh JPEG that (magic bytes) nhung khai content-type la text/html
-    const up = await fetch(`${handle.url}/api/media`, {
+    const up = await fetch(`${handle.url}/api/media`, authed({
       method: 'POST',
       headers: { 'x-filename': 'evil.html', 'content-type': 'text/html' },
       body: fakeJpeg(512),
-    });
+    }));
     const { media } = await up.json();
     assert.equal(media.mime, 'image/jpeg', 'mime phai lay tu magic bytes, khong tin client');
 
-    const file = await fetch(`${handle.url}${media.url}`);
+    const file = await fetch(`${handle.url}${media.url}`, authed());
     assert.equal(file.headers.get('content-type'), 'image/jpeg');
     assert.equal(file.headers.get('x-content-type-options'), 'nosniff');
     assert.match(file.headers.get('content-security-policy') ?? '', /sandbox/);
@@ -140,23 +152,23 @@ test('regression: log day ra trinh duyet phai che token', () => {
 
 test('regression: chan CSRF tu origin khac', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-csrf-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
-    const res = await fetch(`${handle.url}/api/posts`, {
+    const res = await fetch(`${handle.url}/api/posts`, authed({
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: 'https://evil.example.com' },
       body: JSON.stringify({ title: 'hack' }),
-    });
+    }));
     assert.equal(res.status, 403);
     assert.equal((await res.json()).code, 'E_CSRF');
 
     // Cung origin thi van chay
-    const ok = await fetch(`${handle.url}/api/posts`, {
+    const ok = await fetch(`${handle.url}/api/posts`, authed({
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: handle.url },
       body: JSON.stringify({ title: 'hop le' }),
-    });
+    }));
     assert.equal(ok.status, 200);
   } finally {
     await handle.close();
@@ -183,7 +195,7 @@ test('regression: khong nhan token qua query string', async () => {
 
 test('regression: khong cho dang lai bai da dang thanh cong', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-dup-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
     const ch = await handle.workspace.saveChannel({
@@ -192,11 +204,11 @@ test('regression: khong cho dang lai bai da dang thanh cong', async () => {
     const post = await handle.workspace.createPost({
       content: { title: 'x' }, channelIds: [ch.id], status: 'posted',
     });
-    const res = await fetch(`${handle.url}/api/posts/${post.id}/publish`, {
+    const res = await fetch(`${handle.url}/api/posts/${post.id}/publish`, authed({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',
-    });
+    }));
     assert.equal(res.status, 409);
     assert.match((await res.json()).error, /da dang thanh cong/);
   } finally {
@@ -209,14 +221,14 @@ test('regression: bai bi ket o "publishing" duoc khoi phuc khi khoi dong lai', a
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-stuck-'));
   try {
     // Lan 1: tao bai va de o trang thai publishing (gia lap bi kill giua duong)
-    const h1 = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+    const h1 = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
     await h1.start();
     const post = await h1.workspace.createPost({ content: { title: 'x' }, channelIds: ['c'] });
     await h1.workspace.updatePost(post.id, { status: 'publishing' });
     await h1.close();
 
     // Lan 2: khoi dong lai -> phai duoc dua ve failed
-    const h2 = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+    const h2 = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
     await h2.start();
     const after = await h2.workspace.posts.get(post.id);
     assert.equal(after.status, 'failed');
@@ -557,15 +569,15 @@ test('regression: poster khong dang khi signal da bi huy tu truoc', async () => 
 
 test('regression: upload ten file tieng Viet khong bi mangle', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'wam-name-'));
-  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false });
+  const handle = await createAdminServer({ port: 0, host: '127.0.0.1', dataDir: dir, logLevel: 'silent', startScheduler: false, token: ADMIN_TOKEN });
   await handle.start();
   try {
     const name = 'Hình nền 4K.jpg';
-    const res = await fetch(`${handle.url}/api/media`, {
+    const res = await fetch(`${handle.url}/api/media`, authed({
       method: 'POST',
       headers: { 'x-filename': encodeURIComponent(name), 'content-type': 'image/jpeg' },
       body: fakeJpeg(256),
-    });
+    }));
     const { media } = await res.json();
     assert.equal(media.filename, name, `ten file phai duoc decode, nhan: ${media.filename}`);
   } finally {
