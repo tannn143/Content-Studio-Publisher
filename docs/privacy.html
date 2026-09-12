@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Wallpaper Studio Publisher</title>
+<meta name="description" content="Privacy Policy for Wallpaper Studio Publisher: a self-hosted desktop tool that stores everything on your own computer." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>" />
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+<!-- CAN SUA: thay https://github.com/your-username/wallpaper-auto-marketing bang repo that. -->
+
+<header class="site-head">
+  <div class="wrap">
+    <span class="logo" aria-hidden="true">🖼️</span>
+    <span class="site-name">Wallpaper Studio Publisher</span>
+    <nav class="site-nav">
+      <a href="index.html">Home</a>
+      <a href="terms.html">Terms</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="https://github.com/your-username/wallpaper-auto-marketing">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: 12 September 2026</p>
+
+  <p>
+    Wallpaper Studio Publisher ("the app") is a self-hosted desktop
+    application. You download it, you run it on your own computer, and it stores
+    everything on that computer. There is no account to create with us, no
+    server of ours that your data passes through, and no analytics.
+  </p>
+
+  <p>
+    This policy explains exactly what the app touches, because "we don't collect
+    anything" is a claim that deserves specifics.
+  </p>
+
+  <h2>1. Who is responsible for your data</h2>
+
+  <p>
+    You are. The app runs entirely on hardware you control. We — the authors of
+    the app — operate no servers, receive no telemetry, and have no ability to
+    access your installation, your accounts, or your content.
+  </p>
+
+  <p>
+    If you distribute a modified copy of the app to other people, you become
+    responsible for whatever your modified copy does.
+  </p>
+
+  <h2>2. What the app stores, and where</h2>
+
+  <p>
+    Everything lives in a single <code>data/</code> directory next to the app on
+    your computer (overridable with the <code>WAM_DATA_DIR</code> environment
+    variable):
+  </p>
+
+  <div class="table-scroll">
+  <table>
+    <thead>
+      <tr><th>File</th><th>Contents</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>data/tokens.json</code></td>
+        <td>OAuth access tokens and refresh tokens for the accounts you connected</td>
+      </tr>
+      <tr>
+        <td><code>data/channels.json</code></td>
+        <td>Connected account names, usernames, avatar URLs, platform IDs</td>
+      </tr>
+      <tr>
+        <td><code>data/posts.json</code></td>
+        <td>Posts you composed: titles, captions, hashtags, publishing options and results</td>
+      </tr>
+      <tr>
+        <td><code>data/media/</code></td>
+        <td>Image and video files you added to posts</td>
+      </tr>
+      <tr>
+        <td><code>data/settings.json</code></td>
+        <td>Your app credentials (client keys/secrets) and preferences</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>
+    None of these files is transmitted anywhere. They are read and written by
+    the app process running on your machine. Deleting the <code>data/</code>
+    directory erases everything the app knows.
+  </p>
+
+  <h2>3. TikTok data specifically</h2>
+
+  <p>
+    When you connect a TikTok account, the app uses TikTok's official OAuth
+    flow. You authorize on tiktok.com; the app never sees your TikTok password.
+  </p>
+
+  <h3>Scopes the app requests and what it does with each</h3>
+
+  <ul>
+    <li>
+      <strong><code>user.info.basic</code></strong> — the app reads your display
+      name, username and avatar once after you authorize, and shows them in the
+      Channels screen so you can confirm which account is connected. Stored in
+      <code>data/channels.json</code> on your machine. Not used for analytics,
+      advertising, profiling, or training any model.
+    </li>
+    <li>
+      <strong><code>video.upload</code></strong> — used to send a video to your
+      TikTok inbox as a draft. You complete and publish it yourself inside the
+      TikTok app.
+    </li>
+    <li>
+      <strong><code>video.publish</code></strong> — used to publish a post you
+      composed, when you choose "Publish directly" and press Publish. Before
+      each direct post the app calls TikTok's <code>creator_info</code> endpoint
+      to read your current posting settings (available privacy levels, whether
+      you have comments/Duet/Stitch disabled, your maximum video duration). This
+      response is used only to build the publishing form correctly and is not
+      stored after the post completes.
+    </li>
+  </ul>
+
+  <p>
+    <strong>What the app sends to TikTok:</strong> only the post you composed —
+    your media file, your caption, your hashtags, and the publishing settings
+    you selected in the form.
+  </p>
+
+  <p>
+    <strong>What the app never does:</strong> it does not read your videos, your
+    followers, your comments, your messages, your analytics, or any other user's
+    content. It does not follow, like, comment, view or message on your behalf.
+    It has no access to anyone's account but the one you connected.
+  </p>
+
+  <p>
+    <strong>Revoking access:</strong> disconnect the channel in the app's
+    Channels screen, or remove the app under Settings → Security &amp;
+    permissions → Apps in TikTok. Disconnecting in the app deletes that
+    account's tokens from <code>data/tokens.json</code>.
+  </p>
+
+  <p>
+    <strong>Retention:</strong> tokens live on your disk until you disconnect
+    the channel or delete the file. Posts and media stay until you delete them
+    in the app. Because we never receive this data, we cannot retain it and
+    cannot delete it for you.
+  </p>
+
+  <h2>4. Other connected platforms</h2>
+
+  <p>
+    The same model applies to YouTube, Facebook, Instagram and Telegram: the app
+    holds the credentials you give it locally and talks to each platform's
+    official API directly from your machine. Each platform's own privacy policy
+    governs what that platform does with what you publish.
+  </p>
+
+  <h2>5. Media hosting (optional)</h2>
+
+  <p>
+    Instagram and TikTok cannot accept a photo as a file upload — their APIs
+    only accept a publicly reachable URL. If you publish photos to those
+    platforms, you must configure a media host (your own S3-compatible bucket,
+    or a local tunnel). In that case the app uploads the photo to
+    <strong>your</strong> storage, gives the platform that URL, and deletes the
+    temporary file afterwards. We do not operate or see that storage. If you do
+    not configure a media host, the app refuses the post with an explanatory
+    error rather than sending your files anywhere unexpected.
+  </p>
+
+  <h2>6. Network connections the app makes</h2>
+
+  <p>The app connects only to:</p>
+
+  <ul>
+    <li>
+      the official API endpoints of the platforms you connected
+      (<code>open.tiktokapis.com</code>, <code>graph.facebook.com</code>,
+      <code>googleapis.com</code>, <code>api.telegram.org</code>), and
+    </li>
+    <li>your own media host, if you configured one.</li>
+  </ul>
+
+  <p>
+    It contacts no analytics service, no error-reporting service, and no server
+    belonging to us. It does not check for updates. Its web interface binds to
+    <code>127.0.0.1</code> — the loopback interface — so it is not reachable
+    from your network unless you deliberately reconfigure it.
+  </p>
+
+  <h2>7. Children</h2>
+
+  <p>
+    The app is a professional publishing tool and is not directed at children.
+    It is not intended for anyone under the minimum age required by the
+    platforms it connects to.
+  </p>
+
+  <h2>8. Changes to this policy</h2>
+
+  <p>
+    Material changes will be published on this page, with the "Last updated"
+    date above revised. Since the app does not phone home, we cannot notify you
+    directly — check this page or the repository.
+  </p>
+
+  <h2>9. Contact</h2>
+
+  <p>
+    Questions about this policy:
+    <a href="https://github.com/your-username/wallpaper-auto-marketing/issues">open an issue</a>
+    on the app's public repository, or write to the contact address listed in
+    the repository's README.
+  </p>
+
+</div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="spacer">© 2026 Wallpaper Studio Publisher · MIT License</span>
+    <a href="index.html">Home</a>
+    <a href="terms.html">Terms of Service</a>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -207,28 +207,57 @@ từ chối.
 
 ---
 
-## 7. URL properties, Terms of Service, Privacy Policy
+## 7. Website, Redirect URI, Terms of Service, Privacy Policy
 
-**Redirect URI:** `http://127.0.0.1:4000/oauth/tiktok/callback`
-Ghi chú kèm theo: *"The app serves its OAuth callback on the creator's own
-loopback interface; no traffic leaves the machine."*
+Cả bốn ô này nằm trên cùng một nền tảng: bật **GitHub Pages** một lần là có đủ.
 
-**Terms of Service / Privacy Policy** — bắt buộc phải là URL công khai truy cập
-được. Bản thảo đã có sẵn:
+### Bật GitHub Pages
 
-- [docs/terms-of-service.md](./terms-of-service.md)
-- [docs/privacy-policy.md](./privacy-policy.md)
+Repo → **Settings → Pages** → Source: nhánh chính, thư mục `/docs`. Sau vài
+phút bạn có bốn URL:
+
+| Ô trong form TikTok | URL |
+|---|---|
+| Website URL (platform Desktop) | `https://<user>.github.io/<repo>/` |
+| Terms of Service URL | `https://<user>.github.io/<repo>/terms.html` |
+| Privacy Policy URL | `https://<user>.github.io/<repo>/privacy.html` |
+| Redirect URI (Login Kit) | `https://<user>.github.io/<repo>/oauth-bridge/tiktok-callback.html` |
+
+Các trang tương ứng đã có sẵn trong repo:
+
+- [`docs/index.html`](./index.html) — trang giới thiệu, dùng cho ô *"the URL of
+  your official website"* mà platform Desktop yêu cầu
+- [`docs/terms.html`](./terms.html) — Terms of Service
+- [`docs/privacy.html`](./privacy.html) — Privacy Policy
+- [`docs/oauth-bridge/tiktok-callback.html`](./oauth-bridge/tiktok-callback.html)
+  — trang cầu nối OAuth (xem [setup-tiktok-telegram.md](./setup-tiktok-telegram.md#2-redirect-uri-tiktok-bắt-buộc-https))
+
+> **Phải sửa trước khi bật Pages:** cả ba trang đang để placeholder
+> `https://github.com/your-username/wallpaper-auto-marketing`. Thay bằng địa chỉ
+> repo thật, và điền địa chỉ liên hệ vào README — mục Contact của Terms và
+> Privacy đều trỏ về đó.
+
+### Redirect URI
+
+**Không dùng** `http://127.0.0.1:4000/oauth/tiktok/callback` — TikTok từ chối
+mọi URI không bắt đầu bằng `https`, kể cả loopback. Đăng ký URL trang cầu nối ở
+bảng trên, rồi dán đúng URL đó vào web admin: tab **Cài đặt** → TikTok → ô
+**Redirect URI**.
+
+Ghi chú kèm theo cho reviewer: *"The OAuth callback is a static page that only
+forwards the authorization code to the loopback interface on the creator's own
+machine; no traffic reaches any server of ours."*
+
+### Privacy policy nói gì
 
 Privacy policy đã nói rõ ba thứ TikTok soi: token lưu cục bộ và không gửi về
-server nào, từng scope dùng làm gì, và cách creator thu hồi quyền. Cần **đưa hai
-file này lên URL công khai** trước khi nộp — cách nhanh nhất là bật GitHub Pages
-cho repo (Settings → Pages → nguồn là nhánh chính, thư mục `/docs`), rồi lấy URL
-dạng `https://<user>.github.io/<repo>/terms-of-service` và `.../privacy-policy`.
-Nhớ điền địa chỉ liên hệ thật vào README, vì cả hai file đều trỏ về đó.
+server nào, từng scope dùng làm gì, và cách creator thu hồi quyền.
 
-**Ảnh (PULL_FROM_URL):** nếu đăng ảnh, domain host ảnh phải được verify trong
-mục **URL properties** của app. Không verify thì ảnh luôn fail — việc này không
-liên quan đến review nhưng hay bị quên.
+### Ảnh (PULL_FROM_URL)
+
+Nếu đăng ảnh, domain host ảnh phải được verify trong mục **URL properties** của
+app. Không verify thì ảnh luôn fail — việc này không liên quan đến review nhưng
+hay bị quên.
 
 ---
 
@@ -241,9 +270,14 @@ liên quan đến review nhưng hay bị quên.
 - [x] Có công tắc khai báo nội dung thương mại (cả hai loại)
 - [x] Chặn branded content + `SELF_ONLY` ở cả UI và adapter
 - [x] Có tuyên bố đồng ý Music Usage Confirmation / Branded Content Policy
-- [x] Đã soạn Terms of Service và Privacy Policy
-- [ ] **Đưa ToS + Privacy Policy lên URL công khai** và điền vào form
-- [ ] **Điền địa chỉ liên hệ thật vào README** (hai file pháp lý đều trỏ về đó)
+- [x] Đã có trang giới thiệu, Terms of Service và Privacy Policy trong `docs/`
+- [x] Đã có trang cầu nối OAuth https (Redirect URI không dùng được 127.0.0.1)
+- [x] App chặn trước và báo rõ nếu Redirect URI chưa phải https
+- [ ] **Thay placeholder `your-username` trong `docs/index.html`, `terms.html`, `privacy.html`**
+- [ ] **Điền địa chỉ liên hệ thật vào README** (Terms và Privacy đều trỏ về đó)
+- [ ] **Bật GitHub Pages** (Settings → Pages → nhánh chính, thư mục `/docs`)
+- [ ] **Điền 4 URL vào form TikTok**: Website, ToS, Privacy, Redirect URI (bảng mục 7)
+- [ ] **Dán Redirect URI vào web admin**: Cài đặt → TikTok → ô Redirect URI
 - [ ] **Quay video demo** theo kịch bản mục 6
 - [ ] Verify domain host ảnh trong URL properties (chỉ cần nếu đăng ảnh)
 

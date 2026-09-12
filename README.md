@@ -354,6 +354,10 @@ khoá các yêu cầu trên lại để không ai vô tình gỡ mất.
 
 > Đăng ký app trên TikTok Developer: xem [docs/tiktok-app-review.md](docs/tiktok-app-review.md)
 > — có sẵn bản mô tả tiếng Anh, giải trình từng scope và kịch bản video demo.
+>
+> Form cần 4 URL công khai (website, Terms, Privacy, Redirect URI). Thư mục
+> [docs/](docs/) đã có sẵn các trang tĩnh cho cả bốn — bật GitHub Pages với
+> thư mục `/docs` là dùng được ngay.
 
 ### Telegram
 

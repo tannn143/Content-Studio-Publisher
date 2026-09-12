@@ -17,8 +17,9 @@
 
 > Nộp app cho TikTok duyệt: [tiktok-app-review.md](./tiktok-app-review.md) có sẵn bản mô tả
 > tiếng Anh, giải trình từng scope, kịch bản video demo và checklist trước khi nộp.
-> Form cần URL công khai của [Terms of Service](./terms-of-service.md) và
-> [Privacy Policy](./privacy-policy.md).
+> Form cần 4 URL công khai — trang giới thiệu, [Terms of Service](./terms.html),
+> [Privacy Policy](./privacy.html) và Redirect URI. Bật GitHub Pages cho thư mục
+> `/docs` là có đủ cả bốn.
 
 ## 2. Redirect URI: TikTok bắt buộc https
 
