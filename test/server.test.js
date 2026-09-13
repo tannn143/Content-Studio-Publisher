@@ -1084,6 +1084,54 @@ test('phan quyen: member chi THAY kenh duoc cap', async () => {
   });
 });
 
+test('phan quyen: tai khoan moi duoc cap san cac kenh admin da connect', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    // Kenh nen tang khac, tao TRUOC nguoi dung -> cung phai nam trong danh sach
+    // cap san. Viec cap quyen khong phu thuoc platform.
+    const yt = await handle.workspace.saveChannel({
+      platform: 'youtube', name: 'Kenh YouTube', externalId: 'uc_a',
+      config: { clientId: 'i', clientSecret: 's', refreshToken: 'r' },
+    });
+    const tg = await handle.workspace.saveChannel({
+      platform: 'telegram', name: 'Kenh Telegram', externalId: '-100123',
+      config: { botToken: 'b', chatId: '-100123' },
+    });
+    // seedTeam tao them 2 kenh TikTok roi tao nguoi dung ma KHONG gui channelIds.
+    const { channel, other, member, password } = await seedTeam(handle, call);
+    assert.deepEqual(
+      [...member.channelIds].sort(),
+      [channel.id, other.id, yt.id, tg.id].sort(),
+      'cap san moi kenh, khong phan biet nen tang',
+    );
+
+    const nv = await loginAs(base, 'nhanvien', password);
+    const state = await nv.call('/api/state');
+    assert.equal(state.data.channels.length, 4, 'nhan vien phai thay ngay ca 4 kenh');
+
+    // Gui channelIds tuong minh thi ton trong dung nhu vay - ke ca mang rong.
+    const strict = await call('/api/users', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'nhanvien2', role: 'member', channelIds: [] }),
+    });
+    assert.deepEqual(strict.data.user.channelIds, []);
+  });
+});
+
+test('phan quyen: kenh connect SAU khong tu cap cho nguoi cu', async () => {
+  await withServer(async ({ call, handle, base }) => {
+    const { password } = await seedTeam(handle, call);
+    const late = await handle.workspace.saveChannel({
+      platform: 'tiktok', name: 'Brand moi', externalId: 'open_c',
+      config: { clientKey: 'k', clientSecret: 's', refreshToken: 'r' },
+    });
+
+    const nv = await loginAs(base, 'nhanvien', password);
+    const ids = (await nv.call('/api/state')).data.channels.map((c) => c.id);
+    assert.equal(ids.includes(late.id), false, 'kenh them sau phai do admin tick tay');
+    assert.equal(ids.length, 2);
+  });
+});
+
 test('phan quyen: member KHONG dang duoc len kenh chua duoc cap', async () => {
   await withServer(async ({ call, handle, base }) => {
     const { channel, other, member, password } = await seedTeam(handle, call);

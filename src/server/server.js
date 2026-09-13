@@ -501,10 +501,20 @@ function buildRouter(deps) {
     const body = await readJsonBody(ctx.req);
     // Mat khau de trong -> sinh tu dong, tra ve DUNG MOT LAN de admin doc cho nhan vien.
     const password = String(body.password ?? '') || generatePassword();
-    const created = await users.createUser({ ...body, password, mustChangePassword: true });
+    // Khong gui channelIds -> cap san MOI kenh dang co.
+    //
+    // Vi sao: tai khoan tao ra voi danh sach rong thi nhan vien dang nhap vao
+    // khong thay kenh nao, rat de tuong la he thong hong thay vi hieu la chua
+    // duoc cap. Admin van bo tick tung kenh duoc ngay o tab Team.
+    //
+    // Gui channelIds tuong minh (ke ca mang rong) thi ton trong dung nhu vay.
+    // Kenh connect VE SAU khong tu cap cho nguoi cu - phai tick tay.
+    const channelIds = body.channelIds ?? (await workspace.listChannels()).map((c) => c.id);
+    const created = await users.createUser({ ...body, channelIds, password, mustChangePassword: true });
     await users.log({
       actor: ctx.user, action: 'user.create', targetUserId: created.id,
-      detail: `username='${created.username}' role=${created.role}`, ip: ctx.ip,
+      detail: `username='${created.username}' role=${created.role} channels=${created.channelIds.length}`,
+      ip: ctx.ip,
     });
     logger.info('user created', { username: created.username, role: created.role });
     return { user: publicUser(created), password };

@@ -267,6 +267,10 @@ async function refreshState() {
   for (const id of [...state.selectedChannels]) if (!ids.has(id)) state.selectedChannels.delete(id);
 
   renderSidebar();
+  // Tab Team ve checkbox phan quyen tu state.channels -> connect hoac ngat kenh
+  // xong phai ve lai, neu khong admin dang dung o tab do se khong thay kenh vua
+  // them de tick cho nhan vien.
+  if (state.view === 'team') void reloadUsers();
   renderChannelPicker();
   renderProviders();
   renderChannelCards();
@@ -1705,7 +1709,9 @@ async function addTeamMember() {
   try {
     const { user, password } = await api('/api/users', {
       method: 'POST',
-      body: { username, displayName, role: 'member', canPublish: true, channelIds: [] },
+      // Khong gui channelIds: server cap san moi kenh dang co, khoi phai tick
+      // lai tung cai sau khi tao. Bo tick ben duoi neu muon han che bot.
+      body: { username, displayName, role: 'member', canPublish: true },
     });
     state.users.push(user);
     renderTeam();
@@ -1713,7 +1719,7 @@ async function addTeamMember() {
     openModal('Account created', el('div', {}, [
       el('p', {}, `Give ${user.displayName} these details. This password is shown once and cannot be recovered.`),
       el('pre', { class: 'preview-text' }, `username: ${user.username}\npassword: ${password}`),
-      el('p', { class: 'muted small' }, 'They will be asked to choose their own password after signing in. Grant them accounts below before they can publish.'),
+      el('p', { class: 'muted small' }, 'They will be asked to choose their own password after signing in. This account can already publish to every connected account — untick any of them below to restrict it.'),
     ]));
   } catch (err) {
     toast(err.message, { type: 'error', title: 'Could not create the account' });
